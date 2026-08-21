@@ -1,19 +1,25 @@
 # Composio Integration Research
 
-This repository is the foundation for an evidence-backed research pipeline that will evaluate 100 applications as potential agent-callable integrations.
+This repository contains an evidence-backed research pipeline and a static case study covering 100 applications as potential agent-callable integrations.
 
-## Current status
+## Case study
 
-Milestone 1.2 implements one synchronous, catalog-driven production path for any app in
-`data/apps.csv`. It uses role-specific Composio searches, catalog-derived trusted-source selection,
-per-app artifact isolation, bounded page reduction,
-deterministic exact-text evidence snippets, one tool-free OpenAI extraction call, and one
-independent tool-free semantic evidence-audit call. The extractor selects stored snippet IDs rather
-than generating quotations. Deterministic code admits only supported claims and computes
-buildability.
+Open [`docs/index.html`](docs/index.html) directly, or serve it locally:
 
-MCP verification, Browser Tool fallback, concurrency, all-app execution, and the HTML case study are
-intentionally deferred.
+```bash
+python3 -m http.server 8000 --directory docs
+```
+
+The page is self-contained. It presents the headline findings, category and authentication patterns,
+the research workflow, the verification sample, all eight unresolved apps, and a searchable table of
+all 100 attempts. Rebuild it from a local consolidated run with:
+
+```bash
+uv run --frozen python scripts/build_case_study.py
+```
+
+The completed bounded run attempted all 100 catalog apps: 92 produced final records and eight stayed
+unresolved. Generated run artifacts remain ignored because they can contain raw provider responses.
 
 ## Requirements
 
@@ -49,7 +55,7 @@ uv run --frozen mypy src tests
 uv run --frozen pytest
 ```
 
-## Run Milestone 1.2
+## Run the research agent
 
 Put `OPENAI_API_KEY` and `COMPOSIO_API_KEY` in the ignored `.env`, then run one catalog app:
 
@@ -86,9 +92,6 @@ sequential run. The root `run-summary.json` records all successes and failures.
 - `runs/` is reserved for generated run artifacts and is ignored except for its placeholder.
 - `.state/` will contain reusable local session state and is fully ignored.
 
-Do not run the remaining 95 apps or add the verifier before the five pilot records have been
-inspected.
-
 ## Core project rules
 
 - Search and page retrieval will happen through Composio.
@@ -96,6 +99,6 @@ inspected.
 - A separate OpenAI call audits claim-to-evidence support without tools or browsing.
 - Unsupported or conflicting claims remain `unknown`.
 - Drafts and corrections remain separate and auditable.
-- The five-app pilot must be inspected before any 100-app run.
+- Inspect the five-app pilot before starting an all-app run.
 
 See [`AGENTS.md`](AGENTS.md) for agent instructions and [`docs/COMPOSIO_TAKEHOME_CONTEXT.md`](docs/COMPOSIO_TAKEHOME_CONTEXT.md) for the full design.

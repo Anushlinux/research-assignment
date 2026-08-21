@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Evidence-backed research across 100 potential agent integrations.">
+  <meta name="theme-color" content="#f6f7f9">
+  <title>100 Apps, One Integration Research Agent</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f7f9;
+      --surface: #ffffff;
+      --surface-2: #eceff3;
+      --text: #17191d;
+      --muted: #646a73;
+      --line: #d8dce2;
+      --accent: #2457d6;
+      --accent-soft: #e6ecff;
+      --yes: #0b6b45;
+      --conditional: #8a5a00;
+      --unknown: #60656e;
+      --failed: #9a3030;
+      --radius: 12px;
+      --max: 1180px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111317;
+        --surface: #181b20;
+        --surface-2: #22262d;
+        --text: #f0f2f5;
+        --muted: #a8aeb8;
+        --line: #343942;
+        --accent: #7aa2ff;
+        --accent-soft: #1d2b52;
+        --yes: #61d6a3;
+        --conditional: #efbd62;
+        --unknown: #b5bac2;
+        --failed: #ff8d8d;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    a { color: inherit; }
+    button, input, select { font: inherit; }
+    .wrap { width: min(calc(100% - 40px), var(--max)); margin: 0 auto; }
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav-inner { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .brand { font-weight: 760; letter-spacing: -0.02em; text-decoration: none; white-space: nowrap; }
+    .nav-links { display: flex; gap: 20px; font-size: 14px; color: var(--muted); }
+    .nav-links a { text-decoration: none; }
+    .hero { padding: 76px 0 54px; border-bottom: 1px solid var(--line); }
+    .hero-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, .55fr); gap: 64px; align-items: end; }
+    .kicker { color: var(--accent); font-weight: 700; font-size: 14px; margin: 0 0 14px; }
+    h1 { max-width: 860px; margin: 0; font-size: clamp(46px, 7vw, 88px); letter-spacing: -0.065em; line-height: .96; }
+    .hero-copy { max-width: 620px; margin: 24px 0 0; color: var(--muted); font-size: 19px; }
+    .hero-note { border-left: 3px solid var(--accent); padding-left: 18px; color: var(--muted); font-size: 15px; }
+    .hero-note strong { display: block; color: var(--text); font-size: 24px; margin-bottom: 4px; }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--line); }
+    .metric { padding: 28px 24px; border-right: 1px solid var(--line); }
+    .metric:first-child { padding-left: 0; }
+    .metric:last-child { border-right: 0; }
+    .metric strong { display: block; font-size: 34px; line-height: 1; letter-spacing: -0.04em; }
+    .metric span { display: block; margin-top: 8px; color: var(--muted); font-size: 14px; }
+    section { padding: 74px 0; border-bottom: 1px solid var(--line); }
+    h2 { margin: 0; max-width: 760px; font-size: clamp(32px, 4vw, 52px); letter-spacing: -0.045em; line-height: 1.04; }
+    .lead { max-width: 700px; color: var(--muted); font-size: 18px; margin: 18px 0 38px; }
+    .finding-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 56px; }
+    .headline-finding { padding: 26px 0; border-top: 1px solid var(--line); }
+    .headline-finding strong { display: block; font-size: 28px; letter-spacing: -0.035em; }
+    .headline-finding p { margin: 8px 0 0; color: var(--muted); max-width: 55ch; }
+    .auth-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; }
+    .auth-panel h3 { margin: 0 0 20px; font-size: 18px; }
+    .auth-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+    .auth-item { background: var(--surface); padding: 18px; }
+    .auth-item strong { display: block; font-size: 27px; }
+    .auth-item span { color: var(--muted); font-size: 13px; }
+    .matrix { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); }
+    .matrix-row { display: grid; grid-template-columns: minmax(260px, 1fr) repeat(4, 90px); border-bottom: 1px solid var(--line); }
+    .matrix-row:last-child { border-bottom: 0; }
+    .matrix-head { background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 700; }
+    .matrix-name, .matrix-number { padding: 14px 16px; }
+    .matrix-number { text-align: center; border-left: 1px solid var(--line); font-variant-numeric: tabular-nums; font-weight: 750; }
+    .yes { color: var(--yes); }
+    .conditional { color: var(--conditional); }
+    .unknown { color: var(--unknown); }
+    .failed { color: var(--failed); }
+    .opportunity { display: grid; grid-template-columns: 1.15fr .85fr; gap: 24px; }
+    .opportunity article { border: 1px solid var(--line); border-radius: var(--radius); padding: 30px; background: var(--surface); }
+    .opportunity h3 { margin: 0; font-size: 25px; }
+    .opportunity p { color: var(--muted); margin-bottom: 0; }
+    .easy-count { font-size: 64px; letter-spacing: -0.06em; line-height: 1; color: var(--accent); margin: 20px 0; }
+    .workflow { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+    .workflow div { min-height: 118px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); font-size: 14px; }
+    .workflow strong { display: block; margin-bottom: 7px; }
+    .workflow span { color: var(--muted); font-size: 12px; }
+    .proof { display: grid; grid-template-columns: .8fr 1.2fr; gap: 46px; align-items: start; }
+    pre { margin: 0; overflow-x: auto; padding: 22px; background: #15181d; color: #f2f4f7; border-radius: var(--radius); font-size: 13px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+    .button { display: inline-flex; align-items: center; min-height: 42px; padding: 0 16px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px; border: 1px solid var(--line); background: var(--surface); }
+    .button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .verify-summary { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 18px; margin-bottom: 30px; }
+    .verify-number { padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+    .verify-number strong { display: block; font-size: 38px; letter-spacing: -0.05em; }
+    .verify-number span { color: var(--muted); font-size: 14px; }
+    .verify-note { padding: 24px; border-left: 3px solid var(--accent); color: var(--muted); }
+    .audit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .audit-item { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 0 16px; }
+    .audit-item summary { cursor: pointer; display: flex; justify-content: space-between; gap: 12px; padding: 16px 0; font-weight: 700; }
+    .audit-item p { color: var(--muted); margin: 0 0 12px; font-size: 14px; }
+    .audit-item a { display: inline-block; margin-bottom: 16px; color: var(--accent); font-size: 13px; }
+    .audit-result { font-size: 12px; }
+    .audit-result.corrected { color: var(--conditional); }
+    .audit-result.clean { color: var(--yes); }
+    .failure-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .failure-item { padding: 18px; border: 1px solid color-mix(in srgb, var(--failed) 35%, var(--line)); border-radius: var(--radius); background: var(--surface); }
+    .failure-item div { display: flex; justify-content: space-between; gap: 16px; }
+    .failure-item span { color: var(--muted); font-size: 12px; text-align: right; }
+    .failure-item p { color: var(--muted); margin: 10px 0 0; font-size: 14px; }
+    .controls { display: grid; grid-template-columns: 1fr 220px 180px; gap: 10px; margin: 28px 0 16px; }
+    .controls input, .controls select { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 8px; padding: 0 12px; background: var(--surface); color: var(--text); }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1000px; }
+    th { text-align: left; color: var(--muted); background: var(--surface-2); padding: 12px; position: sticky; top: 62px; }
+    td { padding: 12px; border-top: 1px solid var(--line); vertical-align: top; }
+    td:first-child, td:nth-child(4) { font-variant-numeric: tabular-nums; }
+    .status { font-weight: 700; }
+    .evidence-link { color: var(--accent); }
+    .empty { display: none; padding: 34px; text-align: center; color: var(--muted); }
+    footer { padding: 40px 0 70px; color: var(--muted); font-size: 14px; }
+    footer .wrap { display: flex; justify-content: space-between; gap: 20px; }
+    @media (max-width: 850px) {
+      .nav-links { display: none; }
+      .hero-grid, .finding-grid, .opportunity, .proof { grid-template-columns: 1fr; gap: 30px; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .metric { border-bottom: 1px solid var(--line); }
+      .metric:nth-child(2) { border-right: 0; }
+      .workflow { grid-template-columns: 1fr 1fr; }
+      .verify-summary, .audit-grid, .failure-list { grid-template-columns: 1fr; }
+      .controls { grid-template-columns: 1fr; }
+      .matrix-row { grid-template-columns: minmax(190px, 1fr) repeat(4, 60px); }
+      .matrix-name, .matrix-number { padding: 12px 8px; font-size: 12px; }
+    }
+    @media (max-width: 560px) {
+      .wrap { width: min(calc(100% - 28px), var(--max)); }
+      .hero { padding-top: 48px; }
+      h1 { font-size: 48px; }
+      .metrics { grid-template-columns: 1fr; }
+      .metric { border-right: 0; padding-left: 0; }
+      .workflow { grid-template-columns: 1fr; }
+      .matrix { overflow-x: auto; }
+      .matrix-row { min-width: 610px; }
+      footer .wrap { display: block; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body>
+  <nav class="nav" aria-label="Case study navigation">
+    <div class="wrap nav-inner">
+      <a class="brand" href="#top">Integration Research</a>
+      <div class="nav-links">
+        <a href="#findings">Findings</a><a href="#agent">Agent</a><a href="#verification">Verification</a><a href="#results">100 apps</a>
+      </div>
+    </div>
+  </nav>
+
+  <main id="top">
+    <header class="hero">
+      <div class="wrap hero-grid">
+        <div>
+          <p class="kicker">100-app integration research</p>
+          <h1>APIs are common. Access is the bottleneck.</h1>
+          <p class="hero-copy">An evidence-backed pipeline researched authentication, developer access, API breadth, MCP support and buildability across ten categories.</p>
+        </div>
+        <div class="hero-note"><strong>92 validated</strong>Eight apps stayed unresolved after bounded retries. Unknown is a result, not a missing row.</div>
+      </div>
+    </header>
+
+    <div class="wrap metrics" aria-label="Key results">
+      <div class="metric"><strong>100</strong><span>apps attempted</span></div>
+      <div class="metric"><strong>87</strong><span>documented APIs among 92 completed</span></div>
+      <div class="metric"><strong>36</strong><span>confirmed self-serve credential paths</span></div>
+      <div class="metric"><strong>103</strong><span>first-pass claims corrected or removed</span></div>
+    </div>
+
+    <section id="findings">
+      <div class="wrap">
+        <h2>The integration surface exists. Production access is harder to prove.</h2>
+        <p class="lead">The most useful pattern is operational, not technical: public API documentation is abundant, while credential and production-gate documentation is incomplete.</p>
+        <div class="finding-grid">
+          <div>
+            <div class="headline-finding"><strong>Three auth patterns cover most apps.</strong><p>API keys appear in 40 completed records, OAuth 2.0 in 38 and tokens in 35. Apps often support more than one.</p></div>
+            <div class="headline-finding"><strong>47 access paths remain unknown.</strong><p>Only 36 are confirmed self-serve. Seven require a customer administrator and one requires sales contact.</p></div>
+            <div class="headline-finding"><strong>Productivity is the clearest entry point.</strong><p>Six of ten are directly buildable and eight have confirmed self-serve access.</p></div>
+            <div class="headline-finding"><strong>Support is integration-rich but gated.</strong><p>Six of ten are conditional because of administrator control, app review, enterprise access or early availability.</p></div>
+          </div>
+          <aside class="auth-panel">
+            <h3>Authentication across 92 completed records</h3>
+            <div class="auth-list"><div class="auth-item"><strong>40</strong><span>Api Key</span></div><div class="auth-item"><strong>38</strong><span>Oauth2</span></div><div class="auth-item"><strong>35</strong><span>Token</span></div><div class="auth-item"><strong>11</strong><span>Basic</span></div><div class="auth-item"><strong>6</strong><span>Other</span></div><div class="auth-item"><strong>2</strong><span>None</span></div></div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Category outcomes</h2>
+        <p class="lead">Each row contains ten apps. Unknown includes honest evidence gaps, not assumed negatives. Failed is shown separately and is already included inside Unknown.</p>
+        <div class="matrix">
+          <div class="matrix-row matrix-head"><div class="matrix-name">Category</div><div class="matrix-number">Yes</div><div class="matrix-number">Conditional</div><div class="matrix-number">Unknown</div><div class="matrix-number">Failed</div></div>
+          
+        <div class="matrix-row">
+          <div class="matrix-name">AI, Research and Media-native</div>
+          <div class="matrix-number yes">5</div>
+          <div class="matrix-number conditional">2</div>
+          <div class="matrix-number unknown">3</div>
+          <div class="matrix-number failed">0</div>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-name">CRM and Sales</div>
+          <div class="matrix-number yes">3</div>
+          <div class="matrix-number conditional">2</div>
+          <div class="matrix-number unknown">5</div>
+          <div class="matrix-number failed">0</div>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-name">Communications and Messaging</div>
+          <div class="matrix-number yes">2</div>
+          <div class="matrix-number conditional">1</div>
+          <div class="matrix-number unknown">7</div>
+          <div class="matrix-number failed">0</div>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-name">Data, SEO and Scraping</div>
+          <div class="matrix-number yes">3</div>
+          <div class="matrix-number conditional">1</div>
+          <div class="matrix-number unknown">6</div>
+          <div class="matrix-number failed">0</div>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-name">Developer, Infra and Data platforms</div>
+          <div class="matrix-number yes">4</div>
+          <div class="matrix-number conditional">1</div>
+          <div class="matrix-number unknown">5</div>
+          <div class="matrix-number failed">1</div>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-name">Ecommerce</div>
+          <div class="matrix-number yes">1</div>
+          <div class="matrix-number conditional">2</div>
+          <div class="matrix-number unknown">7</div>
+          <div class="matrix-number failed">2</div>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-name">Finance and Fintech</div>
+          <div class="matrix-number yes">1</div>
+          <div class="matrix-number conditional">2</div>
+          <div class="matrix-number unknown">7</div>
+          <div class="matrix-number failed">2</div>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-name">Marketing, Ads, Email and Social</div>
+          <div class="matrix-number yes">2</div>
+          <div class="matrix-number conditional">2</div>
+          <div class="matrix-number unknown">6</div>
+          <div class="matrix-number failed">2</div>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-name">Productivity and Project Management</div>
+          <div class="matrix-number yes">6</div>
+          <div class="matrix-number conditional">2</div>
+          <div class="matrix-number unknown">2</div>
+          <div class="matrix-number failed">1</div>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-name">Support and Helpdesk</div>
+          <div class="matrix-number yes">1</div>
+          <div class="matrix-number conditional">6</div>
+          <div class="matrix-number unknown">3</div>
+          <div class="matrix-number failed">0</div>
+        </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Easy wins and outreach</h2>
+        <p class="lead">Buildability separates a callable surface from the business process required to use it.</p>
+        <div class="opportunity">
+          <article><h3>Start with self-serve</h3><div class="easy-count">27</div><p>Direct buildability plus self-serve or local execution. Representative apps: Pipedrive, Twenty, Close, Plain, Twilio, Pumble, Mailchimp, systeme.io, Gumroad, DataForSEO, SE Ranking, MrScraper, GitHub, Netlify.</p></article>
+          <article><h3>Outreach where access is the product</h3><p>PitchBook needs sales contact. Otter API access is enterprise. NotebookLM requires licences and cloud roles. Google Ads, WhatsApp, Shopify, Intercom, Gorgias and Asana have review gates.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="agent">
+      <div class="wrap">
+        <h2>A bounded research agent</h2>
+        <p class="lead">The model interprets fetched sources. Deterministic code controls discovery, evidence admission, persistence and buildability.</p>
+        <div class="workflow" aria-label="Research workflow">
+          <div><strong>Catalog</strong><span>100 named apps with identity hints</span></div>
+          <div><strong>Search</strong><span>Five role-specific Composio queries</span></div>
+          <div><strong>Select</strong><span>Official domains only</span></div>
+          <div><strong>Fetch</strong><span>Stored pages and exact excerpts</span></div>
+          <div><strong>Extract</strong><span>Structured OpenAI record</span></div>
+          <div><strong>Audit</strong><span>Second model checks every claim</span></div>
+          <div><strong>Admit</strong><span>Rules compute the final verdict</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap proof">
+        <div>
+          <h2>Run the proof</h2>
+          <p class="lead">Every app attempt preserves searches, pages, snippets, draft, audit, diff, validation and final output.</p>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/Anushlinux/research-assignment" target="_blank" rel="noreferrer">Source repository</a>
+            <a class="button" href="#results">Inspect results</a>
+          </div>
+        </div>
+        <pre><code>uv sync --frozen
+
+# Run one app
+uv run --frozen research run   --app-id 61   --run-id github-check
+
+# Run the five-app pilot
+uv run --frozen research run   --ids 61,22,31,90,98   --run-id pilot</code></pre>
+      </div>
+    </section>
+
+    <section id="verification">
+      <div class="wrap">
+        <h2>The first pass was not trusted.</h2>
+        <p class="lead">A twelve-app source audit covered all ten categories and compared five material claims per app with stored excerpts from official documentation.</p>
+        <div class="verify-summary">
+          <div class="verify-number"><strong>52/60</strong><span>first-pass claims matched the supplied evidence</span></div>
+          <div class="verify-number"><strong>60/60</strong><span>final sampled claims matched after admission</span></div>
+          <div class="verify-note"><strong>Important:</strong> this is sample evidence agreement, not a claimed accuracy score for all 100 apps. Six sampled apps needed correction.</div>
+        </div>
+        <div class="audit-grid">
+        <details class="audit-item">
+          <summary>
+            <span>3. Pipedrive</span>
+            <span class="audit-result corrected">Corrected</span>
+          </summary>
+          <p>The draft bundled OAuth into a description without matching evidence and inferred a paid-plan requirement that the source did not prove.</p>
+          <a href="https://developers.pipedrive.com/docs/api/v1" target="_blank" rel="noreferrer">Official evidence</a>
+        </details>
+        <details class="audit-item">
+          <summary>
+            <span>13. Freshdesk</span>
+            <span class="audit-result clean">Clean</span>
+          </summary>
+          <p>The sampled authentication, access, API, MCP and buildability claims matched the fetched official excerpts.</p>
+          <a href="https://support.freshdesk.com/support/solutions/articles/225435-where-can-i-find-my-api-key-" target="_blank" rel="noreferrer">Official evidence</a>
+        </details>
+        <details class="audit-item">
+          <summary>
+            <span>22. Twilio</span>
+            <span class="audit-result corrected">Corrected</span>
+          </summary>
+          <p>The draft description generalized beyond the messaging products established by the supplied source.</p>
+          <a href="https://www.twilio.com/docs/ai/mcp" target="_blank" rel="noreferrer">Official evidence</a>
+        </details>
+        <details class="audit-item">
+          <summary>
+            <span>31. Google Ads</span>
+            <span class="audit-result clean">Clean</span>
+          </summary>
+          <p>OAuth, developer-token review, REST and RPC access, and official MCP claims matched the official documentation sample.</p>
+          <a href="https://developers.google.com/google-ads/api/docs/developer-toolkit/mcp-server" target="_blank" rel="noreferrer">Official evidence</a>
+        </details>
+        <details class="audit-item">
+          <summary>
+            <span>41. Shopify</span>
+            <span class="audit-result clean">Clean</span>
+          </summary>
+          <p>The sampled final claims were directly supported after the retry produced a structurally valid draft.</p>
+          <a href="https://shopify.dev/docs/api/app-ui/using-mcp" target="_blank" rel="noreferrer">Official evidence</a>
+        </details>
+        <details class="audit-item">
+          <summary>
+            <span>51. DataForSEO</span>
+            <span class="audit-result corrected">Corrected</span>
+          </summary>
+          <p>The draft mistook a curl example for a product CLI and assigned API breadth more confidently than the source allowed.</p>
+          <a href="https://docs.dataforseo.com/" target="_blank" rel="noreferrer">Official evidence</a>
+        </details>
+        <details class="audit-item">
+          <summary>
+            <span>61. GitHub</span>
+            <span class="audit-result corrected">Corrected</span>
+          </summary>
+          <p>OAuth-token evidence was insufficient to classify the sampled authentication path specifically as OAuth 2.0.</p>
+          <a href="https://docs.github.com/en/copilot/concepts/context/mcp" target="_blank" rel="noreferrer">Official evidence</a>
+        </details>
+        <details class="audit-item">
+          <summary>
+            <span>71. Notion</span>
+            <span class="audit-result corrected">Corrected</span>
+          </summary>
+          <p>An OAuth-flow reference did not explicitly establish the stricter OAuth 2.0 enum used by the schema.</p>
+          <a href="https://developers.notion.com/cli/guides/api-requests" target="_blank" rel="noreferrer">Official evidence</a>
+        </details>
+        <details class="audit-item">
+          <summary>
+            <span>79. Smartsheet</span>
+            <span class="audit-result clean">Clean</span>
+          </summary>
+          <p>The Business or Enterprise plan restriction and integration claims matched the fetched official evidence.</p>
+          <a href="https://developers.smartsheet.com/ai-mcp/smartsheet/mcp-server" target="_blank" rel="noreferrer">Official evidence</a>
+        </details>
+        <details class="audit-item">
+          <summary>
+            <span>90. PitchBook</span>
+            <span class="audit-result corrected">Corrected</span>
+          </summary>
+          <p>Variable pricing and contact-sales evidence did not prove the draft&#x27;s stronger paid-plan classification.</p>
+          <a href="https://mcp-proxy-external.pitchbook.com/" target="_blank" rel="noreferrer">Official evidence</a>
+        </details>
+        <details class="audit-item">
+          <summary>
+            <span>91. NotebookLM</span>
+            <span class="audit-result clean">Clean</span>
+          </summary>
+          <p>Enterprise setup, licence and Google Cloud role requirements were supported by the official documentation.</p>
+          <a href="https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/api-notebooks" target="_blank" rel="noreferrer">Official evidence</a>
+        </details>
+        <details class="audit-item">
+          <summary>
+            <span>98. Mermaid CLI</span>
+            <span class="audit-result clean">Clean</span>
+          </summary>
+          <p>The repository established a usable local CLI with no remote credential requirement.</p>
+          <a href="https://github.com/mermaid-js/mermaid-cli" target="_blank" rel="noreferrer">Official evidence</a>
+        </details></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Eight apps defeated the bounded run</h2>
+        <p class="lead">Five lacked a catalog-trusted source, two repeatedly failed strict draft validation and one search repeatedly returned a provider error.</p>
+        <div class="failure-list">
+        <article class="failure-item">
+          <div><strong>33. LinkedIn Ads</strong><span>Marketing, Ads, Email and Social</span></div>
+          <p>No catalog-trusted source was selected</p>
+        </article>
+        <article class="failure-item">
+          <div><strong>34. GoHighLevel</strong><span>Marketing, Ads, Email and Social</span></div>
+          <p>No catalog-trusted source was selected</p>
+        </article>
+        <article class="failure-item">
+          <div><strong>44. Salesforce Commerce Cloud</strong><span>Ecommerce</span></div>
+          <p>Draft failed fatal literal validation with 2 error(s)</p>
+        </article>
+        <article class="failure-item">
+          <div><strong>50. fanbasis</strong><span>Ecommerce</span></div>
+          <p>No catalog-trusted source was selected</p>
+        </article>
+        <article class="failure-item">
+          <div><strong>67. Snowflake</strong><span>Developer, Infra and Data platforms</span></div>
+          <p>1 validation error for AppResearchDraft</p>
+        </article>
+        <article class="failure-item">
+          <div><strong>73. Linear</strong><span>Productivity and Project Management</span></div>
+          <p>Composio search failed: Search request failed (HTTP 501): Sorry, we are unable to generate a response for this query with the available information.</p>
+        </article>
+        <article class="failure-item">
+          <div><strong>84. Paygent Connect</strong><span>Finance and Fintech</span></div>
+          <p>No catalog-trusted source was selected</p>
+        </article>
+        <article class="failure-item">
+          <div><strong>85. iPayX</strong><span>Finance and Fintech</span></div>
+          <p>No catalog-trusted source was selected</p>
+        </article></div>
+      </div>
+    </section>
+
+    <section id="results">
+      <div class="wrap">
+        <h2>All 100 apps</h2>
+        <p class="lead">Search by app, category, auth or blocker. Open the evidence link to inspect the first official source attached to that row.</p>
+        <div class="controls">
+          <input id="search" type="search" placeholder="Search apps, auth, categories or blockers" aria-label="Search results">
+          <select id="category" aria-label="Filter by category"><option value="">All categories</option></select>
+          <select id="verdict" aria-label="Filter by verdict"><option value="">All verdicts</option><option value="yes">Yes</option><option value="conditional">Conditional</option><option value="unknown">Unknown</option></select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>App</th><th>Category</th><th>Status</th><th>Buildability</th><th>Auth</th><th>Access</th><th>API</th><th>MCP</th><th>Evidence</th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+          <div class="empty" id="empty">No apps match the current filters.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer><div class="wrap"><span>Evidence-backed integration research, 2026</span><span>Built with Composio Search, OpenAI structured extraction and deterministic admission.</span></div></footer>
+
+  <script type="application/json" id="research-data">[{"id": 1, "app": "Salesforce", "category": "CRM and Sales", "status": "validated", "buildability": "unknown", "auth": "oauth2", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_oauth_and_connected_apps.htm"}, {"id": 2, "app": "HubSpot", "category": "CRM and Sales", "status": "validated", "buildability": "unknown", "auth": "oauth2; token; api_key", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developers.hubspot.com/docs/api-reference/latest/overview"}, {"id": 3, "app": "Pipedrive", "category": "CRM and Sales", "status": "validated", "buildability": "yes", "auth": "oauth2; api_key", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developers.pipedrive.com/docs/api/v1"}, {"id": 4, "app": "Attio", "category": "CRM and Sales", "status": "validated", "buildability": "conditional", "auth": "other; api_key", "access": "admin_required", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://attio.com/help/reference/apps/generating-an-api-key"}, {"id": 5, "app": "Twenty", "category": "CRM and Sales", "status": "validated", "buildability": "yes", "auth": "oauth2; api_key", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://docs.twenty.com/developers/extend/api"}, {"id": 6, "app": "Podio", "category": "CRM and Sales", "status": "validated", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "unknown", "mcp": "unknown", "blocker": "", "evidence": "https://podio.com/"}, {"id": 7, "app": "Zoho CRM", "category": "CRM and Sales", "status": "validated", "buildability": "unknown", "auth": "oauth2", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://www.zoho.com/crm/developer/docs/api/v8"}, {"id": 8, "app": "Close", "category": "CRM and Sales", "status": "validated", "buildability": "yes", "auth": "api_key; oauth2", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developer.close.com/api/overview"}, {"id": 9, "app": "Copper", "category": "CRM and Sales", "status": "validated", "buildability": "conditional", "auth": "api_key; oauth2", "access": "admin_required", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://developer.copper.com/"}, {"id": 10, "app": "DealCloud", "category": "CRM and Sales", "status": "validated", "buildability": "unknown", "auth": "oauth2", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://api.docs.dealcloud.com/docs/token"}, {"id": 11, "app": "Zendesk", "category": "Support and Helpdesk", "status": "validated", "buildability": "unknown", "auth": "oauth2; api_key", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developer.zendesk.com/api-reference"}, {"id": 12, "app": "Intercom", "category": "Support and Helpdesk", "status": "validated", "buildability": "conditional", "auth": "token", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developers.intercom.com/docs/build-an-integration/learn-more/authentication"}, {"id": 13, "app": "Freshdesk", "category": "Support and Helpdesk", "status": "validated", "buildability": "conditional", "auth": "api_key", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "MCP integration is in beta/Early Access and currently limited to selected Freshdesk Enterprise customers; access must be requested through a technical account manager or support.", "evidence": "https://support.freshdesk.com/support/solutions/articles/225435-where-can-i-find-my-api-key-"}, {"id": 14, "app": "Front", "category": "Support and Helpdesk", "status": "validated", "buildability": "unknown", "auth": "token", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://front.com/pricing"}, {"id": 15, "app": "Pylon", "category": "Support and Helpdesk", "status": "validated", "buildability": "conditional", "auth": "token", "access": "admin_required", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://docs.usepylon.com/pylon-docs/developer/api"}, {"id": 16, "app": "LiveAgent", "category": "Support and Helpdesk", "status": "validated", "buildability": "conditional", "auth": "api_key; token; oauth2", "access": "admin_required", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://support.liveagent.com/066804-LiveAgent-API"}, {"id": 17, "app": "Plain", "category": "Support and Helpdesk", "status": "validated", "buildability": "yes", "auth": "api_key", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://help.plain.com/article/creating-api-keys"}, {"id": 18, "app": "Help Scout", "category": "Support and Helpdesk", "status": "recovered_on_retry", "buildability": "unknown", "auth": "oauth2; basic", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://developer.helpscout.com/docs-api"}, {"id": 19, "app": "Gorgias", "category": "Support and Helpdesk", "status": "validated", "buildability": "conditional", "auth": "oauth2; api_key", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developers.gorgias.com/docs/5-submit-app-for-review"}, {"id": 20, "app": "Gladly", "category": "Support and Helpdesk", "status": "validated", "buildability": "conditional", "auth": "basic", "access": "admin_required", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://developer.gladly.com/rest"}, {"id": 21, "app": "Slack", "category": "Communications and Messaging", "status": "validated", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://api.slack.com/methods?query=manifest"}, {"id": 22, "app": "Twilio", "category": "Communications and Messaging", "status": "validated", "buildability": "yes", "auth": "oauth2; api_key; basic", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://www.twilio.com/docs/ai/mcp"}, {"id": 23, "app": "Zoho Cliq", "category": "Communications and Messaging", "status": "validated", "buildability": "unknown", "auth": "oauth2; token", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://www.zoho.com/cliq/help/platform/zoho-cliq-mcp.html"}, {"id": 24, "app": "Lark (Larksuite)", "category": "Communications and Messaging", "status": "validated", "buildability": "unknown", "auth": "token", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://open.larksuite.com/document/uAjLw4CM/ukTMukTMukTM/mcp_integration/mcp_introduction"}, {"id": 25, "app": "Pumble", "category": "Communications and Messaging", "status": "validated", "buildability": "yes", "auth": "api_key; token", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://pumble.com/help/integrations/automation-workflow-integrations/api-keys-integration"}, {"id": 26, "app": "Discord", "category": "Communications and Messaging", "status": "validated", "buildability": "unknown", "auth": "oauth2; token", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://docs.discord.com/developers/platform/oauth2-and-permissions"}, {"id": 27, "app": "Telegram", "category": "Communications and Messaging", "status": "validated", "buildability": "unknown", "auth": "other", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://core.telegram.org/"}, {"id": 28, "app": "WhatsApp Business", "category": "Communications and Messaging", "status": "validated", "buildability": "conditional", "auth": "token", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "Apps used by other businesses must request Advanced access through Meta App Review for the permissions they need.", "evidence": "https://developers.facebook.com/docs/whatsapp/cloud-api/reference"}, {"id": 29, "app": "Aircall", "category": "Communications and Messaging", "status": "validated", "buildability": "unknown", "auth": "api_key", "access": "self_serve", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://developer.aircall.io/docs/basic-authentication"}, {"id": 30, "app": "Vonage", "category": "Communications and Messaging", "status": "validated", "buildability": "unknown", "auth": "basic; token; other", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developer.vonage.com/en/api/messages"}, {"id": 31, "app": "Google Ads", "category": "Marketing, Ads, Email and Social", "status": "validated", "buildability": "conditional", "auth": "oauth2; token", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "Production access may require application review for the developer token’s access level.", "evidence": "https://developers.google.com/google-ads/api/docs/developer-toolkit/mcp-server"}, {"id": 32, "app": "Meta Ads", "category": "Marketing, Ads, Email and Social", "status": "validated", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://developers.facebook.com/docs/marketing-apis"}, {"id": 33, "app": "LinkedIn Ads", "category": "Marketing, Ads, Email and Social", "status": "failed_after_retries", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "unknown", "mcp": "unknown", "blocker": "No catalog-trusted source was selected", "evidence": ""}, {"id": 34, "app": "GoHighLevel", "category": "Marketing, Ads, Email and Social", "status": "failed_after_retries", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "unknown", "mcp": "unknown", "blocker": "No catalog-trusted source was selected", "evidence": ""}, {"id": 35, "app": "Mailchimp", "category": "Marketing, Ads, Email and Social", "status": "validated", "buildability": "yes", "auth": "oauth2; api_key", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://mailchimp.com/developer/marketing/api/list-webhooks"}, {"id": 36, "app": "Klaviyo", "category": "Marketing, Ads, Email and Social", "status": "validated", "buildability": "conditional", "auth": "oauth2; api_key", "access": "admin_required", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developers.klaviyo.com/en/docs/klaviyo_mcp_server"}, {"id": 37, "app": "systeme.io", "category": "Marketing, Ads, Email and Social", "status": "validated", "buildability": "yes", "auth": "api_key", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developer.systeme.io/reference/api"}, {"id": 38, "app": "Pinterest", "category": "Marketing, Ads, Email and Social", "status": "validated", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://developers.pinterest.com/"}, {"id": 39, "app": "Threads (Meta)", "category": "Marketing, Ads, Email and Social", "status": "validated", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://developers.facebook.com/docs/threads"}, {"id": 40, "app": "SendGrid", "category": "Marketing, Ads, Email and Social", "status": "validated", "buildability": "unknown", "auth": "api_key", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://docs.sendgrid.com/api-reference/api-keys/retrieve-an-existing-api-key"}, {"id": 41, "app": "Shopify", "category": "Ecommerce", "status": "recovered_on_retry", "buildability": "conditional", "auth": "oauth2; token", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://shopify.dev/docs/api/app-ui/using-mcp"}, {"id": 42, "app": "WooCommerce", "category": "Ecommerce", "status": "validated", "buildability": "unknown", "auth": "api_key; basic", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developer.woocommerce.com/docs/apis/rest-api/authentication"}, {"id": 43, "app": "BigCommerce", "category": "Ecommerce", "status": "recovered_on_retry", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://developer.bigcommerce.com/docs/integrations/webhooks/events"}, {"id": 44, "app": "Salesforce Commerce Cloud", "category": "Ecommerce", "status": "failed_after_retries", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "unknown", "mcp": "unknown", "blocker": "Draft failed fatal literal validation with 2 error(s)", "evidence": ""}, {"id": 45, "app": "Magento (Adobe Commerce)", "category": "Ecommerce", "status": "recovered_on_retry", "buildability": "conditional", "auth": "other; token", "access": "admin_required", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://developer.adobe.com/commerce/webapi/get-started/authentication/gs-authentication-oauth"}, {"id": 46, "app": "Squarespace", "category": "Ecommerce", "status": "validated", "buildability": "unknown", "auth": "api_key; oauth2", "access": "self_serve", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://developers.squarespace.com/commerce-apis/authentication-and-permissions"}, {"id": 47, "app": "Ecwid", "category": "Ecommerce", "status": "validated", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://api-docs.ecwid.com/"}, {"id": 48, "app": "Gumroad", "category": "Ecommerce", "status": "validated", "buildability": "yes", "auth": "oauth2; token", "access": "self_serve", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://gumroad.com/api"}, {"id": 49, "app": "Amazon Selling Partner", "category": "Ecommerce", "status": "recovered_on_retry", "buildability": "unknown", "auth": "token", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://developer-docs.amazon.com/sp-api/docs/self-authorization"}, {"id": 50, "app": "fanbasis", "category": "Ecommerce", "status": "failed_after_retries", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "unknown", "mcp": "unknown", "blocker": "No catalog-trusted source was selected", "evidence": ""}, {"id": 51, "app": "DataForSEO", "category": "Data, SEO and Scraping", "status": "validated", "buildability": "yes", "auth": "basic", "access": "self_serve", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://docs.dataforseo.com/"}, {"id": 52, "app": "SE Ranking", "category": "Data, SEO and Scraping", "status": "validated", "buildability": "yes", "auth": "api_key", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://seranking.com/api-pricing.html"}, {"id": 53, "app": "Ahrefs", "category": "Data, SEO and Scraping", "status": "validated", "buildability": "unknown", "auth": "oauth2", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "Production activation requires Ahrefs verification, and new products not part of the legacy Integrations program require an Ahrefs Enterprise subscription before activation.", "evidence": "https://docs.ahrefs.com/ahrefs-connect/docs/approval-process"}, {"id": 54, "app": "MrScraper", "category": "Data, SEO and Scraping", "status": "recovered_on_retry", "buildability": "yes", "auth": "token", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://docs.mrscraper.com/docs/api/overview"}, {"id": 55, "app": "Apify", "category": "Data, SEO and Scraping", "status": "validated", "buildability": "unknown", "auth": "token", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://docs.apify.com/api/v2/getting-started"}, {"id": 56, "app": "Firecrawl", "category": "Data, SEO and Scraping", "status": "recovered_on_retry", "buildability": "unknown", "auth": "api_key", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://docs.firecrawl.dev/api-reference/introduction"}, {"id": 57, "app": "Bright Data", "category": "Data, SEO and Scraping", "status": "validated", "buildability": "unknown", "auth": "api_key; basic", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://docs.brightdata.com/ai/mcp-server/overview"}, {"id": 58, "app": "Sherlock", "category": "Data, SEO and Scraping", "status": "validated", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "unknown", "mcp": "unknown", "blocker": "", "evidence": "https://github.com/sherlock-project/sherlock/issues/129"}, {"id": 59, "app": "Waterfall.io", "category": "Data, SEO and Scraping", "status": "validated", "buildability": "unknown", "auth": "api_key", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://docs.waterfall.io/v1/api-keys-create"}, {"id": 60, "app": "Clay", "category": "Data, SEO and Scraping", "status": "validated", "buildability": "conditional", "auth": "api_key; oauth2", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "Workspace administrators control which MCP clients are allowed; disabling the relevant client policy blocks new authorization and token refreshes.", "evidence": "https://developers.clay.com/routines/api"}, {"id": 61, "app": "GitHub", "category": "Developer, Infra and Data platforms", "status": "validated", "buildability": "yes", "auth": "token; basic", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://docs.github.com/en/copilot/concepts/context/mcp"}, {"id": 62, "app": "Vercel", "category": "Developer, Infra and Data platforms", "status": "validated", "buildability": "unknown", "auth": "token", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://vercel.com/docs/agent-resources/vercel-mcp"}, {"id": 63, "app": "Netlify", "category": "Developer, Infra and Data platforms", "status": "validated", "buildability": "yes", "auth": "oauth2; token", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://docs.netlify.com/api-and-cli-guides/api-guides/get-started-with-api"}, {"id": 64, "app": "Cloudflare", "category": "Developer, Infra and Data platforms", "status": "validated", "buildability": "yes", "auth": "api_key", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developers.cloudflare.com/agents/api-reference/mcp-handler-api"}, {"id": 65, "app": "Supabase", "category": "Developer, Infra and Data platforms", "status": "validated", "buildability": "unknown", "auth": "api_key; oauth2; token", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://supabase.com/docs/guides/ai-tools/mcp"}, {"id": 66, "app": "Neo4j", "category": "Developer, Infra and Data platforms", "status": "validated", "buildability": "yes", "auth": "basic; token; other; none", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://neo4j.com/docs/api/java-driver/current/org.neo4j.driver/org/neo4j/driver/AuthTokens.html"}, {"id": 67, "app": "Snowflake", "category": "Developer, Infra and Data platforms", "status": "failed_after_retries", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "unknown", "mcp": "unknown", "blocker": "1 validation error for AppResearchDraft", "evidence": ""}, {"id": 68, "app": "MongoDB Atlas", "category": "Developer, Infra and Data platforms", "status": "validated", "buildability": "conditional", "auth": "oauth2; api_key", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "The Atlas Administration API does not provide access to data stored in clusters; database data access requires separate database-user credentials.", "evidence": "https://www.mongodb.com/docs/atlas/api/api-authentication"}, {"id": 69, "app": "Datadog", "category": "Developer, Infra and Data platforms", "status": "validated", "buildability": "unknown", "auth": "api_key", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://docs.datadoghq.com/api/latest.md"}, {"id": 70, "app": "Sentry", "category": "Developer, Infra and Data platforms", "status": "validated", "buildability": "unknown", "auth": "token; api_key", "access": "self_serve", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://docs.sentry.io/api"}, {"id": 71, "app": "Notion", "category": "Productivity and Project Management", "status": "validated", "buildability": "yes", "auth": "token", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developers.notion.com/cli/guides/api-requests"}, {"id": 72, "app": "Airtable", "category": "Productivity and Project Management", "status": "validated", "buildability": "yes", "auth": "token; oauth2", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://airtable.com/developers/web/api/authentication"}, {"id": 73, "app": "Linear", "category": "Productivity and Project Management", "status": "failed_after_retries", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "unknown", "mcp": "unknown", "blocker": "Composio search failed: Search request failed (HTTP 501): Sorry, we are unable to generate a response for this query with the available information.", "evidence": ""}, {"id": 74, "app": "Jira", "category": "Productivity and Project Management", "status": "validated", "buildability": "unknown", "auth": "oauth2; basic; token", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developer.atlassian.com/cloud/jira/platform/rest/v2/intro"}, {"id": 75, "app": "Asana", "category": "Productivity and Project Management", "status": "validated", "buildability": "conditional", "auth": "token", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developers.asana.com/docs/app-component-approval-checklist"}, {"id": 76, "app": "Monday.com", "category": "Productivity and Project Management", "status": "validated", "buildability": "yes", "auth": "api_key", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developer.monday.com/api-reference"}, {"id": 77, "app": "ClickUp", "category": "Productivity and Project Management", "status": "validated", "buildability": "yes", "auth": "token; oauth2", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://clickup.com/api"}, {"id": 78, "app": "Coda", "category": "Productivity and Project Management", "status": "validated", "buildability": "yes", "auth": "oauth2; token", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://coda.io/apis/v1/openapi.yaml"}, {"id": 79, "app": "Smartsheet", "category": "Productivity and Project Management", "status": "validated", "buildability": "conditional", "auth": "api_key; oauth2", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "The Smartsheet API is restricted to Business and Enterprise plans, and API access tokens are documented for Business and Enterprise plans.", "evidence": "https://developers.smartsheet.com/ai-mcp/smartsheet/mcp-server"}, {"id": 80, "app": "Harvest", "category": "Productivity and Project Management", "status": "validated", "buildability": "yes", "auth": "token; oauth2", "access": "self_serve", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://help.getharvest.com/api-v2/authentication-api/authentication/authentication"}, {"id": 81, "app": "Stripe", "category": "Finance and Fintech", "status": "validated", "buildability": "unknown", "auth": "api_key; basic", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://docs.stripe.com/api/authentication"}, {"id": 82, "app": "Plaid", "category": "Finance and Fintech", "status": "validated", "buildability": "conditional", "auth": "oauth2", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://plaid.com/docs/api/oauth"}, {"id": 83, "app": "Binance", "category": "Finance and Fintech", "status": "validated", "buildability": "unknown", "auth": "api_key", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://binance-docs.github.io/apiAgent-API-EN"}, {"id": 84, "app": "Paygent Connect", "category": "Finance and Fintech", "status": "failed_after_retries", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "unknown", "mcp": "unknown", "blocker": "No catalog-trusted source was selected", "evidence": ""}, {"id": 85, "app": "iPayX", "category": "Finance and Fintech", "status": "failed_after_retries", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "unknown", "mcp": "unknown", "blocker": "No catalog-trusted source was selected", "evidence": ""}, {"id": 86, "app": "QuickBooks", "category": "Finance and Fintech", "status": "validated", "buildability": "yes", "auth": "oauth2", "access": "self_serve", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://developer.intuit.com/app/developer/qbo/docs/develop/authentication-and-authorization"}, {"id": 87, "app": "Xero", "category": "Finance and Fintech", "status": "validated", "buildability": "unknown", "auth": "oauth2", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developer.xero.com/faq/oauth2"}, {"id": 88, "app": "Brex", "category": "Finance and Fintech", "status": "validated", "buildability": "unknown", "auth": "token", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developer.brex.com/docs/mcp"}, {"id": 89, "app": "Ramp", "category": "Finance and Fintech", "status": "recovered_on_retry", "buildability": "unknown", "auth": "oauth2", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://docs.ramp.com/developer-api/v1/authorization"}, {"id": 90, "app": "PitchBook", "category": "Finance and Fintech", "status": "validated", "buildability": "conditional", "auth": "other", "access": "contact_sales", "api": "unknown", "mcp": "official", "blocker": "", "evidence": "https://mcp-proxy-external.pitchbook.com/"}, {"id": 91, "app": "NotebookLM", "category": "AI, Research and Media-native", "status": "validated", "buildability": "conditional", "auth": "token", "access": "unknown", "api": "yes", "mcp": "unknown", "blocker": "The source requires Gemini Notebook Enterprise setup and licenses before notebook API use; sharing also requires granting users the Cloud NotebookLM User IAM role.", "evidence": "https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/api-notebooks"}, {"id": 92, "app": "Otter AI", "category": "AI, Research and Media-native", "status": "validated", "buildability": "conditional", "auth": "api_key", "access": "unknown", "api": "limited", "mcp": "unknown", "blocker": "Public API access is restricted to Enterprise workspaces, and workspaces without the feature are directed to contact an Otter account manager.", "evidence": "https://help.otter.ai/hc/en-us/articles/36130822688279-Otter-ai-Public-API"}, {"id": 93, "app": "Fathom", "category": "AI, Research and Media-native", "status": "validated", "buildability": "unknown", "auth": "api_key", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://help.fathom.video/en/articles/11497793"}, {"id": 94, "app": "Consensus", "category": "AI, Research and Media-native", "status": "validated", "buildability": "yes", "auth": "api_key", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://consensus.app/"}, {"id": 95, "app": "Reducto", "category": "AI, Research and Media-native", "status": "validated", "buildability": "yes", "auth": "api_key", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://docs.reducto.ai/api-reference/parse"}, {"id": 96, "app": "Devin", "category": "AI, Research and Media-native", "status": "validated", "buildability": "unknown", "auth": "api_key; token", "access": "unknown", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://docs.devin.ai/"}, {"id": 97, "app": "higgsfield", "category": "AI, Research and Media-native", "status": "validated", "buildability": "unknown", "auth": "unknown", "access": "unknown", "api": "limited", "mcp": "official", "blocker": "", "evidence": "https://higgsfield.ai/cli"}, {"id": 98, "app": "Mermaid CLI", "category": "AI, Research and Media-native", "status": "validated", "buildability": "yes", "auth": "none", "access": "not_required", "api": "yes", "mcp": "unknown", "blocker": "", "evidence": "https://github.com/mermaid-js/mermaid-cli"}, {"id": 99, "app": "YouTube Transcript", "category": "AI, Research and Media-native", "status": "validated", "buildability": "yes", "auth": "api_key; oauth2", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://transcriptapi.com/"}, {"id": 100, "app": "Grain", "category": "AI, Research and Media-native", "status": "validated", "buildability": "yes", "auth": "token; oauth2", "access": "self_serve", "api": "yes", "mcp": "official", "blocker": "", "evidence": "https://developers.grain.com/"}]</script>
+  <script>
+    const data = JSON.parse(document.getElementById('research-data').textContent);
+    const search = document.getElementById('search');
+    const category = document.getElementById('category');
+    const verdict = document.getElementById('verdict');
+    const rows = document.getElementById('rows');
+    const empty = document.getElementById('empty');
+    const categories = [...new Set(data.map(item => item.category))].sort();
+    categories.forEach(value => category.add(new Option(value, value)));
+
+    function escapeText(value) {
+      const span = document.createElement('span');
+      span.textContent = value || '';
+      return span.innerHTML;
+    }
+
+    function render() {
+      const query = search.value.trim().toLowerCase();
+      const filtered = data.filter(item => {
+        const haystack = Object.values(item).join(' ').toLowerCase();
+        return (!query || haystack.includes(query))
+          && (!category.value || item.category === category.value)
+          && (!verdict.value || item.buildability === verdict.value);
+      });
+      rows.innerHTML = filtered.map(item => `
+        <tr>
+          <td>${item.id}</td><td><strong>${escapeText(item.app)}</strong></td><td>${escapeText(item.category)}</td>
+          <td class="status">${escapeText(item.status.replaceAll('_', ' '))}</td>
+          <td class="${escapeText(item.buildability)}"><strong>${escapeText(item.buildability)}</strong></td>
+          <td>${escapeText(item.auth)}</td><td>${escapeText(item.access.replaceAll('_', ' '))}</td>
+          <td>${escapeText(item.api)}</td><td>${escapeText(item.mcp)}</td>
+          <td>${item.evidence ? `<a class="evidence-link" href="${encodeURI(item.evidence)}" target="_blank" rel="noreferrer">Open</a>` : escapeText(item.blocker || 'Unresolved')}</td>
+        </tr>`).join('');
+      empty.style.display = filtered.length ? 'none' : 'block';
+    }
+    [search, category, verdict].forEach(control => control.addEventListener('input', render));
+    render();
+  </script>
+</body>
+</html>
