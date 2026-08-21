@@ -1,0 +1,48 @@
+[project]
+name = "integration-research"
+version = "0.1.0"
+description = "Evidence-backed research for agent-callable application integrations"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "composio",
+  "openai",
+  "openai-agents",
+  "pydantic",
+  "pydantic-settings",
+  "rich",
+  "tenacity",
+  "typer",
+]
+
+[dependency-groups]
+dev = [
+  "mypy",
+  "pytest",
+  "pytest-asyncio",
+  "ruff",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/integration_research"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [".state", "runs"]
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "RUF", "SIM", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "strict"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"

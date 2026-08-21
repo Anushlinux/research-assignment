@@ -1,0 +1,27 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Python and uv
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Local research state and generated runs
+.state/
+runs/*
+!runs/.gitkeep
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
