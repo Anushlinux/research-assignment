@@ -1,0 +1,18 @@
+{
+  "version": "20260813_00",
+  "inputSchema": {
+    "type": "object",
+    "title": "GetSessionRequest",
+    "required": [
+      "sessionId"
+    ],
+    "properties": {
+      "sessionId": {
+        "type": "string",
+        "title": "Session Id",
+        "description": "The sessionId returned from a CreateTask call you made previously. Only use session IDs from your own CreateTask responses."
+      }
+    },
+    "description": "Request model for getting session details."
+  }
+}

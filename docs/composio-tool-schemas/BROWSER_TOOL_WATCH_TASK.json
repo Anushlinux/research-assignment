@@ -1,0 +1,24 @@
+{
+  "version": "20260813_00",
+  "inputSchema": {
+    "type": "object",
+    "title": "WatchTaskRequest",
+    "required": [
+      "taskId"
+    ],
+    "properties": {
+      "taskId": {
+        "type": "string",
+        "title": "Task Id",
+        "description": "The taskId from CreateTask response"
+      },
+      "lastStepSeen": {
+        "type": "integer",
+        "title": "Last Step Seen",
+        "default": 0,
+        "description": "Last step number from a previous WatchTask response (current_step value). Only steps after this will be returned for incremental updates. Omit or pass 0 to get all steps."
+      }
+    },
+    "description": "Request model for watching task progress."
+  }
+}

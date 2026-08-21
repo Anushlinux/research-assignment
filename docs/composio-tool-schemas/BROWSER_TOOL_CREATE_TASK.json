@@ -1,0 +1,37 @@
+{
+  "version": "20260813_00",
+  "inputSchema": {
+    "type": "object",
+    "title": "CreateTaskRequest",
+    "required": [
+      "task"
+    ],
+    "properties": {
+      "task": {
+        "type": "string",
+        "title": "Task",
+        "minLength": 10,
+        "description": "Natural language instructions for the browser AI agent. Be specific and clear. Examples: 'Go to amazon.com, search for wireless headphones, and return the top 3 results with prices', 'Log into twitter.com and post a tweet saying Hello World'. For multi-step workflows, break them into clear sequential instructions."
+      },
+      "secrets": {
+        "type": "object",
+        "title": "Secrets",
+        "description": "Domain-specific credentials for automatic login. Map domain patterns to 'username:password'. Example: {'https://example.com': 'user@email.com:pass123', 'https://*.google.com': 'email@gmail.com:password'}. Wildcards (*) supported for subdomains.",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
+      "startUrl": {
+        "type": "string",
+        "title": "Start Url",
+        "description": "URL to navigate to before starting the task. If not provided, agent starts from blank page."
+      },
+      "sessionId": {
+        "type": "string",
+        "title": "Session Id",
+        "description": "Leave this empty for the first task, a new session will be auto-created. To continue in an existing browser: pass the browser_session_id from a previous CreateTask response. This preserves login state and cookies between tasks. Important: the previous task in this session must be finished or stopped (via StopTask or by waiting for WatchTask to show status='finished') before creating a new task."
+      }
+    },
+    "description": "Request model for creating a browser automation task."
+  }
+}

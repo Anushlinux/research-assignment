@@ -1,0 +1,60 @@
+{
+  "version": "20260618_00",
+  "inputSchema": {
+    "type": "object",
+    "title": "FetchUrlContentRequest",
+    "required": [
+      "urls"
+    ],
+    "properties": {
+      "text": {
+        "type": "boolean",
+        "title": "Text",
+        "default": true,
+        "description": "Include extracted markdown text content from the page. Defaults to true."
+      },
+      "urls": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "title": "Urls",
+        "examples": [
+          [
+            "https://example.com/article",
+            "https://docs.python.org/"
+          ]
+        ],
+        "description": "List of public URLs to web pages (HTML content) to fetch content from. URLs must be valid and publicly accessible. Do not use direct links to images (.jpg, .png, .gif), PDFs, or other binary files - use web page URLs only. Also accepts a single URL string."
+      },
+      "extras": {
+        "type": "object",
+        "title": "Extras",
+        "description": "Additional content options like imageLinks or links counts (e.g., {'imageLinks': 3, 'links': 5}).",
+        "additionalProperties": {
+          "type": "integer"
+        }
+      },
+      "summary": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        ],
+        "title": "Summary",
+        "description": "Include AI-generated summary of the page content. Can be boolean or object with query/schema options."
+      },
+      "max_characters": {
+        "type": "integer",
+        "title": "Max Characters",
+        "description": "Maximum number of characters to extract from each page. Maps to text.maxCharacters in Exa API."
+      }
+    }
+  }
+}

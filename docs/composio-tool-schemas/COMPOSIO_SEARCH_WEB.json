@@ -1,0 +1,20 @@
+{
+  "version": "20260618_00",
+  "inputSchema": {
+    "type": "object",
+    "title": "SearchRequest",
+    "required": [
+      "query"
+    ],
+    "properties": {
+      "query": {
+        "type": "string",
+        "title": "Query",
+        "examples": [
+          "Coffee"
+        ],
+        "description": "The search query for the Composio Exa API. Must be non-empty; using any other parameter name (e.g., 'q') causes an invalid-request error. Include qualifiers (year, region, platform, intent) for better results — broad queries return generic content; excessive site: or quoted-term filters can return zero results. Add disambiguating terms (city, role, domain) when searching for people or organizations with common names."
+      }
+    }
+  }
+}
