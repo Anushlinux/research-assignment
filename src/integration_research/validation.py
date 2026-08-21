@@ -1,42 +1,45 @@
-"""Deterministic evidence and semantic validation."""
+"""Fatal structural, literal-provenance, and consistency validation."""
 
 from __future__ import annotations
 
 import re
 import unicodedata
-from typing import cast
+from dataclasses import dataclass
 
 from integration_research.models import (
     ApiAvailability,
     ApiBreadth,
-    ApiProtocol,
     AppInput,
     AppResearchDraft,
     AuthMethod,
-    Claim,
-    DeveloperAccess,
+    CommercialRequirement,
+    CredentialAccess,
+    EvidenceRef,
+    EvidenceSnippet,
     FetchedSource,
     McpStatus,
     ProductionGate,
+    SourceTier,
     Ternary,
     ValidationIssue,
     ValidationReport,
 )
 
-NEGATIVE_MARKERS: tuple[str, ...] = (
-    "no api",
-    "does not provide",
-    "does not support",
-    "not supported",
-    "not available",
-    "unavailable",
-    "deprecated",
-    "discontinued",
-)
+
+@dataclass(frozen=True)
+class MaterialClaim:
+    field: str
+    value: object
+    evidence: list[EvidenceRef]
 
 
 def normalize_evidence_text(value: str) -> str:
     normalized = unicodedata.normalize("NFKC", value)
+    # Composio returns Markdown. Normalize raw links and bracketed rendered labels to the same
+    # visible text. This remains deterministic literal matching; it performs no fuzzy comparison.
+    normalized = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", normalized)
+    normalized = re.sub(r"\[([^\]]+)\]", r"\1", normalized)
+    normalized = normalized.replace("**", "").replace("__", "").replace("`", "")
     return re.sub(r"\s+", " ", normalized).strip()
 
 
@@ -44,124 +47,64 @@ def quote_exists(quote: str, source_text: str) -> bool:
     return normalize_evidence_text(quote) in normalize_evidence_text(source_text)
 
 
-def _has_explicit_negative(claim: Claim[object], sources: dict[str, FetchedSource]) -> bool:
-    for evidence in claim.evidence:
-        source = sources.get(evidence.source_id)
-        quote = normalize_evidence_text(evidence.quote).lower()
-        if (
-            source is not None
-            and source.successful
-            and any(marker in quote for marker in NEGATIVE_MARKERS)
-        ):
-            return True
-    return False
-
-
-def normalize_unsupported_negatives(
-    draft: AppResearchDraft, sources: dict[str, FetchedSource]
-) -> tuple[AppResearchDraft, list[ValidationIssue]]:
-    """Convert unsupported negative conclusions to honest unknowns."""
-
-    normalized = draft.model_copy(deep=True)
-    changes: list[ValidationIssue] = []
-
-    if normalized.mcp_status.value == McpStatus.NOT_FOUND:
-        normalized.mcp_status = Claim[McpStatus](value=McpStatus.UNKNOWN, evidence=[])
-        if not any("mcp" in question.lower() for question in normalized.unresolved_questions):
-            normalized.unresolved_questions.append(
-                "Does GitHub currently provide an official or community MCP server?"
-            )
-        changes.append(
-            ValidationIssue(
-                level="warning",
-                code="negative_mcp_normalized",
-                field="mcp_status",
-                message="not_found was normalized to unknown because search absence is not proof",
-            )
-        )
-
-    api_claim = cast(Claim[object], normalized.api_availability)
-    if normalized.api_availability.value == ApiAvailability.NO and not _has_explicit_negative(
-        api_claim, sources
-    ):
-        normalized.api_availability = Claim[ApiAvailability](
-            value=ApiAvailability.UNKNOWN, evidence=[]
-        )
-        if not any("api" in question.lower() for question in normalized.unresolved_questions):
-            normalized.unresolved_questions.append("Does GitHub expose a supported developer API?")
-        changes.append(
-            ValidationIssue(
-                level="warning",
-                code="negative_api_normalized",
-                field="api_availability",
-                message="unsupported API absence was normalized to unknown",
-            )
-        )
-
-    access_claim = cast(Claim[object], normalized.developer_access)
-    if normalized.developer_access.value == DeveloperAccess.NOT_AVAILABLE and not (
-        _has_explicit_negative(access_claim, sources)
-    ):
-        normalized.developer_access = Claim[DeveloperAccess](
-            value=DeveloperAccess.UNKNOWN, evidence=[]
-        )
-        if not any(
-            "access" in question.lower() or "credential" in question.lower()
-            for question in normalized.unresolved_questions
-        ):
-            normalized.unresolved_questions.append(
-                "Can a GitHub developer obtain credentials for the documented interface?"
-            )
-        changes.append(
-            ValidationIssue(
-                level="warning",
-                code="negative_access_normalized",
-                field="developer_access",
-                message="unsupported access absence was normalized to unknown",
-            )
-        )
-    return normalized, changes
-
-
-def _all_claims(draft: AppResearchDraft) -> list[tuple[str, Claim[object]]]:
-    claims: list[tuple[str, Claim[object]]] = [
-        ("description", cast(Claim[object], draft.description)),
-        ("developer_access", cast(Claim[object], draft.developer_access)),
-        ("api_availability", cast(Claim[object], draft.api_availability)),
-        ("api_breadth", cast(Claim[object], draft.api_breadth)),
-        ("api_capabilities.read", cast(Claim[object], draft.api_capabilities.read)),
-        ("api_capabilities.write", cast(Claim[object], draft.api_capabilities.write)),
-        (
-            "api_capabilities.webhooks_or_events",
-            cast(Claim[object], draft.api_capabilities.webhooks_or_events),
+def iter_material_claims(draft: AppResearchDraft) -> list[MaterialClaim]:
+    claims = [
+        MaterialClaim("description", draft.description.value, draft.description.evidence),
+        MaterialClaim(
+            "credential_access", draft.credential_access.value, draft.credential_access.evidence
         ),
-        ("api_surface_summary", cast(Claim[object], draft.api_surface_summary)),
-        ("mcp_status", cast(Claim[object], draft.mcp_status)),
+        MaterialClaim(
+            "commercial_requirement",
+            draft.commercial_requirement.value,
+            draft.commercial_requirement.evidence,
+        ),
+        MaterialClaim(
+            "production_gate", draft.production_gate.value, draft.production_gate.evidence
+        ),
+        MaterialClaim(
+            "api_availability", draft.api_availability.value, draft.api_availability.evidence
+        ),
+        MaterialClaim("webhooks", draft.webhooks.value, draft.webhooks.evidence),
+        MaterialClaim("official_sdk", draft.official_sdk.value, draft.official_sdk.evidence),
+        MaterialClaim("cli", draft.cli.value, draft.cli.evidence),
+        MaterialClaim("api_breadth", draft.api_breadth.value, draft.api_breadth.evidence),
+        MaterialClaim(
+            "api_capabilities.read",
+            draft.api_capabilities.read.value,
+            draft.api_capabilities.read.evidence,
+        ),
+        MaterialClaim(
+            "api_capabilities.write",
+            draft.api_capabilities.write.value,
+            draft.api_capabilities.write.evidence,
+        ),
+        MaterialClaim(
+            "api_surface_summary",
+            draft.api_surface_summary.value,
+            draft.api_surface_summary.evidence,
+        ),
+        MaterialClaim("mcp_status", draft.mcp_status.value, draft.mcp_status.evidence),
     ]
     claims.extend(
-        (f"auth_methods[{index}]", cast(Claim[object], claim))
-        for index, claim in enumerate(draft.auth_methods)
+        MaterialClaim(f"auth_methods[{index}]", item.method, item.evidence)
+        for index, item in enumerate(draft.auth_methods)
     )
     claims.extend(
-        (f"production_gates[{index}]", cast(Claim[object], claim))
-        for index, claim in enumerate(draft.production_gates)
-    )
-    claims.extend(
-        (f"api_protocols[{index}]", cast(Claim[object], claim))
-        for index, claim in enumerate(draft.api_protocols)
+        MaterialClaim(f"api_styles[{index}]", item.value, item.evidence)
+        for index, item in enumerate(draft.api_styles)
     )
     if draft.blocker is not None:
-        claims.append(("blocker", cast(Claim[object], draft.blocker)))
+        claims.append(MaterialClaim("blocker", draft.blocker.value, draft.blocker.evidence))
     return claims
 
 
-def _is_unknown(value: object) -> bool:
-    return value in {
+def is_unknown(value: object) -> bool:
+    return value is None or value in {
         AuthMethod.UNKNOWN,
-        DeveloperAccess.UNKNOWN,
+        CredentialAccess.UNKNOWN,
+        CommercialRequirement.UNKNOWN,
         ProductionGate.UNKNOWN,
         ApiAvailability.UNKNOWN,
-        ApiProtocol.UNKNOWN,
         ApiBreadth.UNKNOWN,
         Ternary.UNKNOWN,
         McpStatus.UNKNOWN,
@@ -170,18 +113,60 @@ def _is_unknown(value: object) -> bool:
 
 def _question_covers(field: str, questions: list[str]) -> bool:
     terms = {
+        "description": ("description", "what", "product"),
         "auth_methods": ("auth", "token", "credential"),
-        "developer_access": ("access", "credential"),
-        "production_gates": ("production", "approval", "gate", "review"),
+        "credential_access": ("access", "credential", "create"),
+        "commercial_requirement": ("commercial", "free", "paid", "plan", "price"),
+        "production_gate": ("production", "approval", "gate", "review"),
         "api_availability": ("api", "interface"),
-        "api_protocols": ("protocol", "rest", "graphql", "api"),
+        "api_styles": ("style", "rest", "graphql", "rpc", "api"),
+        "webhooks": ("webhook", "event"),
+        "official_sdk": ("sdk", "library"),
+        "cli": ("cli", "command line"),
         "api_breadth": ("breadth", "coverage", "surface", "api"),
-        "api_capabilities": ("read", "write", "webhook", "event", "capabil"),
+        "api_capabilities": ("read", "write", "capabil"),
+        "api_surface_summary": ("surface", "api", "operation"),
         "mcp_status": ("mcp", "model context protocol"),
+        "blocker": ("blocker", "prevent"),
     }
     root = field.split("[", 1)[0].split(".", 1)[0]
     expected = terms.get(root, (root.replace("_", " "),))
     return any(any(term in question.lower() for term in expected) for question in questions)
+
+
+def normalize_unknown_questions(
+    draft: AppResearchDraft,
+) -> tuple[AppResearchDraft, list[ValidationIssue]]:
+    """Add deterministic review questions for model-returned unknowns.
+
+    The raw draft remains immutable in storage. This normalization only repairs bookkeeping that
+    can be derived from the schema; it never upgrades an unknown value or invents evidence.
+    """
+
+    normalized = draft.model_copy(deep=True)
+    issues: list[ValidationIssue] = []
+    unknown_fields = [
+        claim.field for claim in iter_material_claims(normalized) if is_unknown(claim.value)
+    ]
+    if not normalized.api_styles:
+        unknown_fields.append("api_styles")
+    for field in dict.fromkeys(unknown_fields):
+        if _question_covers(field, normalized.unresolved_questions):
+            continue
+        root = field.split("[", 1)[0].split(".", 1)[0]
+        label = root.replace("_", " ")
+        normalized.unresolved_questions.append(
+            f"What evidence resolves the {label} for {normalized.app_name}?"
+        )
+        issues.append(
+            ValidationIssue(
+                level="normalization",
+                code="unknown_question_added",
+                field=field,
+                message="Added the missing deterministic unresolved question.",
+            )
+        )
+    return normalized, issues
 
 
 def validate_draft(
@@ -189,8 +174,11 @@ def validate_draft(
     *,
     app_input: AppInput,
     sources: dict[str, FetchedSource],
+    snippets: dict[str, EvidenceSnippet],
     normalizations: list[ValidationIssue] | None = None,
 ) -> ValidationReport:
+    """Validate facts that code can prove without semantic judgment."""
+
     errors: list[ValidationIssue] = []
     warnings: list[ValidationIssue] = []
     unknown_fields: list[str] = []
@@ -198,26 +186,30 @@ def validate_draft(
     def error(code: str, field: str, message: str) -> None:
         errors.append(ValidationIssue(level="error", code=code, field=field, message=message))
 
+    def warning(code: str, field: str, message: str) -> None:
+        warnings.append(ValidationIssue(level="warning", code=code, field=field, message=message))
+
     if draft.app_id != app_input.app_id:
         error("identity_mismatch", "app_id", "draft app_id does not match apps.csv")
     if draft.app_name != app_input.app_name:
         error("identity_mismatch", "app_name", "draft app_name does not match apps.csv")
     if draft.category != app_input.category:
         error("identity_mismatch", "category", "draft category does not match apps.csv")
-    if not draft.description.value.strip() or "\n" in draft.description.value.strip():
-        error("invalid_description", "description", "description must be one non-empty line")
+    if draft.description.value is not None:
+        description = draft.description.value.strip()
+        if not description or "\n" in description:
+            error("invalid_description", "description", "description must be one non-empty line")
 
-    for field, claim in _all_claims(draft):
-        if _is_unknown(claim.value):
+    for field, value, evidence in (
+        (claim.field, claim.value, claim.evidence) for claim in iter_material_claims(draft)
+    ):
+        if is_unknown(value):
             unknown_fields.append(field)
-            if claim.evidence:
-                warnings.append(
-                    ValidationIssue(
-                        level="warning",
-                        code="unknown_has_evidence",
-                        field=field,
-                        message="unknown claim carries evidence that is not needed",
-                    )
+            if evidence:
+                warning(
+                    "unknown_has_evidence",
+                    field,
+                    "unknown claim carries evidence that is not admitted",
                 )
             if not _question_covers(field, draft.unresolved_questions):
                 error(
@@ -226,67 +218,85 @@ def validate_draft(
                     "material unknown does not have a matching unresolved question",
                 )
             continue
-        if isinstance(claim.value, str) and not claim.value.strip():
+        if isinstance(value, str) and not value.strip():
             error("empty_claim", field, "known text claim must not be empty")
-        if not claim.evidence:
+        if not evidence:
             error("missing_evidence", field, "known material claim has no evidence")
             continue
-        for index, evidence in enumerate(claim.evidence):
+        for index, reference in enumerate(evidence):
             evidence_field = f"{field}.evidence[{index}]"
-            source = sources.get(evidence.source_id)
+            source = sources.get(reference.source_id)
             if source is None:
                 error("unknown_source", evidence_field, "evidence source_id does not exist")
                 continue
             if not source.successful:
                 error("failed_source", evidence_field, "evidence references a failed fetch")
                 continue
-            if not quote_exists(evidence.quote, source.text):
+            snippet = snippets.get(reference.snippet_id)
+            if snippet is None:
+                error("unknown_snippet", evidence_field, "evidence snippet_id does not exist")
+                continue
+            if snippet.source_id != reference.source_id:
+                error(
+                    "snippet_source_mismatch",
+                    evidence_field,
+                    "evidence snippet belongs to a different source",
+                )
+                continue
+            if not quote_exists(snippet.text, source.text):
                 error(
                     "quote_not_found",
                     evidence_field,
-                    "evidence quote does not occur in the fetched source",
+                    "evidence snippet does not occur in the fetched source",
                 )
 
+    if not draft.api_styles:
+        unknown_fields.append("api_styles")
+        if not _question_covers("api_styles", draft.unresolved_questions):
+            error(
+                "unknown_without_question",
+                "api_styles",
+                "empty API styles require a matching unresolved question",
+            )
+
     availability = draft.api_availability.value
-    protocol_values = [claim.value for claim in draft.api_protocols]
     if availability == ApiAvailability.NO:
-        if protocol_values:
-            error("api_contradiction", "api_protocols", "absent API cannot expose protocols")
+        if draft.api_styles:
+            error("api_contradiction", "api_styles", "absent API cannot expose API styles")
         if draft.api_breadth.value != ApiBreadth.NONE:
             error("api_contradiction", "api_breadth", "absent API requires breadth none")
-        capability_values = {
+        if Ternary.YES in {
             draft.api_capabilities.read.value,
             draft.api_capabilities.write.value,
-            draft.api_capabilities.webhooks_or_events.value,
-        }
-        if Ternary.YES in capability_values:
-            error("api_contradiction", "api_capabilities", "absent API cannot have capabilities")
+        }:
+            error("api_contradiction", "api_capabilities", "absent API cannot read or write")
     if availability in {ApiAvailability.YES, ApiAvailability.LIMITED}:
-        confirmed_protocols = [value for value in protocol_values if value != ApiProtocol.UNKNOWN]
-        if not confirmed_protocols:
-            error("api_protocol_missing", "api_protocols", "available API needs a protocol")
+        if not draft.api_styles:
+            warning(
+                "api_style_unknown",
+                "api_styles",
+                "available API has no semantically admitted style",
+            )
         if draft.api_breadth.value == ApiBreadth.NONE:
             error("api_contradiction", "api_breadth", "available API cannot have breadth none")
         if (
-            draft.api_capabilities.read.value != Ternary.YES
-            and draft.api_capabilities.write.value != Ternary.YES
+            draft.api_capabilities.read.value == Ternary.NO
+            and draft.api_capabilities.write.value == Ternary.NO
         ):
             error(
                 "api_capability_missing",
                 "api_capabilities",
-                "available API needs a meaningful read or write capability",
+                "available API cannot have both read and write explicitly absent",
             )
+    if draft.api_breadth.value == ApiBreadth.NONE and draft.api_styles:
+        error("api_contradiction", "api_breadth", "API styles cannot coexist with breadth none")
 
     if draft.mcp_status.value == McpStatus.OFFICIAL:
-        for evidence in draft.mcp_status.evidence:
-            source = sources.get(evidence.source_id)
+        for reference in draft.mcp_status.evidence:
+            source = sources.get(reference.source_id)
             if source is None or not source.successful:
                 continue
-            if source.source_tier.value not in {
-                "official_developer_docs",
-                "official_github",
-                "official_blog",
-            }:
+            if source.source_tier not in set(SourceTier):
                 error("mcp_not_official", "mcp_status", "official MCP lacks official evidence")
 
     return ValidationReport(

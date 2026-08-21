@@ -2,6 +2,10 @@ import csv
 from collections import Counter
 from pathlib import Path
 
+import pytest
+
+from integration_research.pipeline import load_app
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 APPS_CSV = PROJECT_ROOT / "data" / "apps.csv"
 EXPECTED_HEADER = ["id", "app_name", "website_hint", "category", "notes"]
@@ -44,3 +48,12 @@ def test_pilot_apps_match_the_brief() -> None:
     assert {app_id: apps_by_id[app_id]["app_name"] for app_id in EXPECTED_PILOT} == EXPECTED_PILOT
     assert apps_by_id[84]["app_name"] == "Paygent Connect"
     assert apps_by_id[84]["website_hint"] == ""
+
+
+def test_runtime_catalog_loads_arbitrary_valid_ids_and_rejects_invalid_ids() -> None:
+    assert load_app(1).app_name == "Salesforce"
+    assert load_app(100).app_name == "Grain"
+    with pytest.raises(ValueError, match="does not exist"):
+        load_app(0)
+    with pytest.raises(ValueError, match="does not exist"):
+        load_app(101)

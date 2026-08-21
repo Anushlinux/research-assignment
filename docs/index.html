@@ -1,0 +1,1339 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A two-minute case study of an agent that researched 100 app integrations.">
+  <title>100 App Integration Research</title>
+  <style>
+    :root { color-scheme: light; --bg:#f7f7f5; --paper:#fff; --text:#171715; --muted:#66665f; --line:#deded8; --blue:#3157d5; --green:#177245; --amber:#986400; --red:#b43b32; --radius:12px; --ease-out:cubic-bezier(.23,1,.32,1); }
+    * { box-sizing:border-box; }
+    html { background:var(--bg); }
+    body { margin:0; color:var(--text); background:var(--bg); font:15px/1.5 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    a { color:inherit; text-underline-offset:3px; }
+    .page { width:min(1120px,calc(100% - 40px)); margin:auto; }
+    header { height:60px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); font-size:13px; }
+    header strong { font-size:14px; }
+    header a { color:var(--muted); }
+    .hero { padding:64px 0 36px; }
+    .eyebrow { margin:0 0 12px; color:var(--blue); font-weight:700; }
+    h1 { max-width:900px; margin:0; font-size:clamp(42px,6.5vw,76px); line-height:.98; letter-spacing:-.055em; }
+    .hero > p:last-of-type { max-width:760px; margin:22px 0 0; color:var(--muted); font-size:19px; }
+    .scoreboard { display:grid; grid-template-columns:repeat(4,1fr); margin-top:38px; background:var(--line); border:1px solid var(--line); gap:1px; }
+    .score { padding:22px; background:var(--paper); }
+    .score strong { display:block; font-size:30px; letter-spacing:-.04em; }
+    .score span { color:var(--muted); font-size:13px; }
+    section { padding:52px 0; border-top:1px solid var(--line); }
+    .section-head { display:grid; grid-template-columns:240px 1fr; gap:32px; margin-bottom:28px; }
+    .section-head p { margin:0; color:var(--muted); }
+    h2 { margin:0; font-size:26px; letter-spacing:-.025em; }
+    h3 { margin:0 0 6px; font-size:16px; }
+    .answers { display:grid; grid-template-columns:repeat(2,1fr); border:1px solid var(--line); background:var(--line); gap:1px; }
+    .answer { min-height:150px; padding:24px; background:var(--paper); }
+    .answer .label { display:block; margin-bottom:22px; color:var(--muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+    .answer strong { display:block; font-size:24px; line-height:1.2; letter-spacing:-.025em; }
+    .answer p { margin:9px 0 0; color:var(--muted); }
+    .table-shell { overflow-x:auto; border:1px solid var(--line); background:var(--paper); }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th,td { padding:11px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+    thead th { color:var(--muted); background:#f0f0ec; font-size:11px; text-transform:uppercase; letter-spacing:.045em; }
+    tbody tr:last-child > * { border-bottom:0; }
+    tbody th { font-weight:650; }
+    .matrix td { text-align:center; font-variant-numeric:tabular-nums; }
+    .matrix th:first-child { min-width:230px; }
+    .good { color:var(--green); font-weight:700; }
+    .bad { color:var(--red); font-weight:700; }
+    .note { margin:10px 0 0; color:var(--muted); font-size:12px; }
+    .workflow { display:grid; grid-template-columns:repeat(4,1fr); border:1px solid var(--line); background:var(--line); gap:1px; counter-reset:step; }
+    .step { padding:22px; background:var(--paper); counter-increment:step; }
+    .step::before { content:"0" counter(step); display:block; margin-bottom:28px; color:var(--blue); font:700 12px/1 ui-monospace,SFMono-Regular,monospace; }
+    .step p { margin:8px 0 0; color:var(--muted); font-size:13px; }
+    .human { border-top:3px solid var(--amber); }
+    .proof-grid { display:grid; grid-template-columns:.8fr 1.2fr; gap:18px; }
+    .card { padding:24px; border:1px solid var(--line); background:var(--paper); border-radius:var(--radius); }
+    .card-wide { grid-column:1 / -1; }
+    .card p { color:var(--muted); }
+    pre { overflow:auto; margin:18px 0; padding:16px; background:#171715; color:#f7f7f5; border-radius:8px; font:12px/1.6 ui-monospace,SFMono-Regular,monospace; }
+    .button { display:inline-flex; min-height:42px; align-items:center; padding:0 15px; border-radius:8px; background:var(--blue); color:#fff; text-decoration:none; font-weight:700; transition:transform 140ms var(--ease-out); }
+    .button:active { transform:scale(.97); }
+    .accuracy { display:flex; align-items:center; gap:18px; margin:18px 0 22px; }
+    .accuracy strong { font-size:34px; letter-spacing:-.04em; }
+    .arrow { color:var(--muted); }
+    .pill { display:inline-flex; white-space:nowrap; padding:3px 7px; border-radius:999px; font-size:11px; font-weight:700; background:#ecece7; }
+    .clean,.verdict-yes { color:var(--green); background:#e5f3eb; }
+    .fixed,.verdict-conditional { color:var(--amber); background:#f7efd9; }
+    .verdict-unknown { color:var(--muted); }
+    .status-verified { color:var(--green); background:#e5f3eb; }
+    .status-needs_human_review { color:var(--amber); background:#f7efd9; }
+    .status-failed_after_retries { color:var(--red); background:#f8e5e3; }
+    .failures { columns:2; padding:0; margin:0; list-style:none; }
+    .failures li { break-inside:avoid; display:grid; gap:4px; padding:13px 0; border-bottom:1px solid var(--line); }
+    .failures span { color:var(--muted); font-size:12px; }
+    .controls { display:grid; grid-template-columns:1fr 240px 170px; gap:9px; margin-bottom:14px; }
+    input,select { min-height:42px; width:100%; padding:0 11px; border:1px solid var(--line); border-radius:8px; background:var(--paper); color:var(--text); font:inherit; }
+    .results-meta { margin:0 0 12px; color:var(--muted); font-size:13px; }
+    .apps-table { min-width:900px; }
+    .apps-table td:first-child { width:44px; color:var(--muted); font-variant-numeric:tabular-nums; }
+    .apps-table th:nth-child(2) { min-width:160px; }
+    .muted { color:var(--muted); }
+    footer { padding:32px 0 60px; color:var(--muted); font-size:12px; border-top:1px solid var(--line); }
+    [hidden] { display:none!important; }
+    @media (max-width:780px) { .page { width:min(100% - 24px,1120px); } .hero { padding-top:44px; } .scoreboard,.answers { grid-template-columns:1fr 1fr; } .section-head,.proof-grid { grid-template-columns:1fr; gap:14px; } .workflow { grid-template-columns:1fr 1fr; } .controls { grid-template-columns:1fr; } .failures { columns:1; } }
+    @media (max-width:480px) { .scoreboard,.answers,.workflow { grid-template-columns:1fr; } h1 { font-size:43px; } }
+    @media (prefers-reduced-motion:reduce) { .button { transition:none; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header><strong>100 App Integration Research</strong><a href="https://github.com/Anushlinux/research-assignment/tree/codex/milestone-1-1-hardening">Source repository</a></header>
+    <main>
+      <div class="hero">
+        <p class="eyebrow">The two-minute answer</p>
+        <h1>APIs are common. Getting production access is the real blocker.</h1>
+        <p>An agent attempted all 100 apps. It found many callable surfaces, but documentation often failed to prove who can create credentials, which plan is required, or whether production approval is needed.</p>
+        <div class="scoreboard" aria-label="Headline results">
+          <div class="score"><strong>100</strong><span>apps attempted</span></div>
+          <div class="score"><strong>94</strong><span>accepted records</span></div>
+          <div class="score"><strong>46</strong><span>buildable now</span></div>
+          <div class="score"><strong>6</strong><span>failed after retries</span></div>
+        </div>
+      </div>
+      <section id="findings">
+        <div class="section-head"><h2>What the research says</h2><p>Four conclusions a reviewer should remember.</p></div>
+        <div class="answers">
+          <article class="answer"><span class="label">Dominant auth</span><strong>API key 37 · OAuth 2.0 45 · Token 31</strong><p>Apps can support more than one method, so these counts overlap.</p></article>
+          <article class="answer"><span class="label">Best starting point</span><strong>Communications and Messaging is the clearest entry point.</strong><p>9 of ten apps are directly buildable; 9 have confirmed self-serve access.</p></article>
+          <article class="answer"><span class="label">Evidence boundary</span><strong>25 accepted records still have an unproven credential path.</strong><p>The API may exist, but the docs do not always establish usable production access.</p></article>
+          <article class="answer"><span class="label">Recommended action</span><strong>Start with 46 easy wins. Use outreach for gated apps.</strong><p>Do not mistake missing evidence for “no API.” Keep it unknown until sales, admin, or partner access confirms it.</p></article>
+        </div>
+      </section>
+      <section>
+        <div class="section-head"><h2>Category matrix</h2><p>Self-serve and gated describe credential access. The final four columns describe buildability and always total ten apps.</p></div>
+        <div class="table-shell"><table class="matrix"><thead><tr><th>Category</th><th>Self-serve</th><th>Gated</th><th>Build now</th><th>Conditional</th><th>Needs proof</th><th>Failed run</th></tr></thead><tbody>
+            <tr>
+              <th scope="row">CRM and Sales</th>
+              <td>4</td>
+              <td>2</td>
+              <td class="good">4</td>
+              <td>2</td>
+              <td>4</td>
+              <td class="bad">0</td>
+            </tr>
+            <tr>
+              <th scope="row">Support and Helpdesk</th>
+              <td>1</td>
+              <td>7</td>
+              <td class="good">0</td>
+              <td>8</td>
+              <td>2</td>
+              <td class="bad">0</td>
+            </tr>
+            <tr>
+              <th scope="row">Communications and Messaging</th>
+              <td>9</td>
+              <td>0</td>
+              <td class="good">9</td>
+              <td>0</td>
+              <td>1</td>
+              <td class="bad">0</td>
+            </tr>
+            <tr>
+              <th scope="row">Marketing, Ads, Email and Social</th>
+              <td>5</td>
+              <td>1</td>
+              <td class="good">5</td>
+              <td>2</td>
+              <td>1</td>
+              <td class="bad">2</td>
+            </tr>
+            <tr>
+              <th scope="row">Ecommerce</th>
+              <td>2</td>
+              <td>3</td>
+              <td class="good">1</td>
+              <td>5</td>
+              <td>3</td>
+              <td class="bad">1</td>
+            </tr>
+            <tr>
+              <th scope="row">Data, SEO and Scraping</th>
+              <td>5</td>
+              <td>1</td>
+              <td class="good">5</td>
+              <td>2</td>
+              <td>3</td>
+              <td class="bad">0</td>
+            </tr>
+            <tr>
+              <th scope="row">Developer, Infra and Data platforms</th>
+              <td>5</td>
+              <td>1</td>
+              <td class="good">5</td>
+              <td>2</td>
+              <td>3</td>
+              <td class="bad">0</td>
+            </tr>
+            <tr>
+              <th scope="row">Productivity and Project Management</th>
+              <td>8</td>
+              <td>0</td>
+              <td class="good">8</td>
+              <td>0</td>
+              <td>1</td>
+              <td class="bad">1</td>
+            </tr>
+            <tr>
+              <th scope="row">Finance and Fintech</th>
+              <td>3</td>
+              <td>1</td>
+              <td class="good">2</td>
+              <td>2</td>
+              <td>4</td>
+              <td class="bad">2</td>
+            </tr>
+            <tr>
+              <th scope="row">AI, Research and Media-native</th>
+              <td>7</td>
+              <td>1</td>
+              <td class="good">7</td>
+              <td>2</td>
+              <td>1</td>
+              <td class="bad">0</td>
+            </tr></tbody></table></div>
+        <p class="note">Gated means confirmed administrator or sales involvement. “Needs proof” is an evidence gap, not a negative finding.</p>
+      </section>
+      <section id="agent">
+        <div class="section-head"><h2>What I built</h2><p>A bounded agent where models interpret evidence, but code decides what may enter the final result.</p></div>
+        <div class="workflow">
+          <article class="step"><h3>Find evidence</h3><p>Composio Search runs role-specific queries and keeps official sources.</p></article>
+          <article class="step"><h3>Extract claims</h3><p>OpenAI turns stored excerpts into a structured app record.</p></article>
+          <article class="step"><h3>Verify and admit</h3><p>A second pass checks each claim. Deterministic rules remove unsupported claims and compute buildability.</p></article>
+          <article class="step human"><h3>Human needed here</h3><p>Review a sample, inspect ambiguous sources, and contact sales or administrators where public evidence stops.</p></article>
+        </div>
+      </section>
+      <section id="proof">
+        <div class="section-head"><h2>Proof and verification</h2><p>The complete rerun preserves evidence and separates verified output from output that still needs a person.</p></div>
+        <div class="proof-grid">
+          <article class="card"><h3>Run the agent</h3><p>Every attempt preserves search, source, snippet, draft, audit, diff, validation, and final artifacts.</p><pre><code>uv sync --frozen
+
+uv run --frozen research run \
+  --app-id 61 \
+  --run-id github-check</code></pre><a class="button" href="https://github.com/Anushlinux/research-assignment/tree/codex/milestone-1-1-hardening">Open source and README</a></article>
+          <article class="card"><h3>New 100-app rerun</h3><div class="accuracy"><strong>289 unknowns</strong><span class="arrow">→</span><strong>200 unknowns</strong></div><p>Across 94 comparable accepted outputs and eight common decision fields, the new retrieval pass removed 89 unknown values. The final gate admitted 21 records as verified and marked 73 for human review. This proves stronger evidence coverage, not perfect factual accuracy.</p></article>
+          <article class="card card-wide"><h3>12-app claim-to-evidence sample</h3><div class="accuracy"><strong>52/60 supported</strong><span class="arrow">→</span><strong>60/60 after correction</strong></div><p>Five material claims were manually checked for each sampled app against stored official-source excerpts. Six apps were clean; six exposed a miss that the admission pass corrected. This validates the sampled claim-to-evidence decisions, not a global accuracy score for all 100 apps.</p><div class="table-shell"><table><thead><tr><th>App</th><th>First pass</th><th>After correction</th><th>Outcome</th><th>Evidence</th></tr></thead><tbody>
+        <tr>
+          <th scope="row">3. Pipedrive</th>
+          <td>3/5</td>
+          <td>5/5</td>
+          <td><span class="pill fixed">Corrected</span></td>
+          <td><a href="https://developers.pipedrive.com/docs/api/v1" target="_blank" rel="noreferrer">Source</a></td>
+        </tr>
+        <tr>
+          <th scope="row">13. Freshdesk</th>
+          <td>5/5</td>
+          <td>5/5</td>
+          <td><span class="pill clean">Clean</span></td>
+          <td><a href="https://support.freshdesk.com/support/solutions/articles/225435-where-can-i-find-my-api-key-" target="_blank" rel="noreferrer">Source</a></td>
+        </tr>
+        <tr>
+          <th scope="row">22. Twilio</th>
+          <td>4/5</td>
+          <td>5/5</td>
+          <td><span class="pill fixed">Corrected</span></td>
+          <td><a href="https://www.twilio.com/docs/ai/mcp" target="_blank" rel="noreferrer">Source</a></td>
+        </tr>
+        <tr>
+          <th scope="row">31. Google Ads</th>
+          <td>5/5</td>
+          <td>5/5</td>
+          <td><span class="pill clean">Clean</span></td>
+          <td><a href="https://developers.google.com/google-ads/api/docs/developer-toolkit/mcp-server" target="_blank" rel="noreferrer">Source</a></td>
+        </tr>
+        <tr>
+          <th scope="row">41. Shopify</th>
+          <td>5/5</td>
+          <td>5/5</td>
+          <td><span class="pill clean">Clean</span></td>
+          <td><a href="https://shopify.dev/docs/api/app-ui/using-mcp" target="_blank" rel="noreferrer">Source</a></td>
+        </tr>
+        <tr>
+          <th scope="row">51. DataForSEO</th>
+          <td>3/5</td>
+          <td>5/5</td>
+          <td><span class="pill fixed">Corrected</span></td>
+          <td><a href="https://docs.dataforseo.com/" target="_blank" rel="noreferrer">Source</a></td>
+        </tr>
+        <tr>
+          <th scope="row">61. GitHub</th>
+          <td>4/5</td>
+          <td>5/5</td>
+          <td><span class="pill fixed">Corrected</span></td>
+          <td><a href="https://docs.github.com/en/copilot/concepts/context/mcp" target="_blank" rel="noreferrer">Source</a></td>
+        </tr>
+        <tr>
+          <th scope="row">71. Notion</th>
+          <td>4/5</td>
+          <td>5/5</td>
+          <td><span class="pill fixed">Corrected</span></td>
+          <td><a href="https://developers.notion.com/cli/guides/api-requests" target="_blank" rel="noreferrer">Source</a></td>
+        </tr>
+        <tr>
+          <th scope="row">79. Smartsheet</th>
+          <td>5/5</td>
+          <td>5/5</td>
+          <td><span class="pill clean">Clean</span></td>
+          <td><a href="https://developers.smartsheet.com/ai-mcp/smartsheet/mcp-server" target="_blank" rel="noreferrer">Source</a></td>
+        </tr>
+        <tr>
+          <th scope="row">90. PitchBook</th>
+          <td>4/5</td>
+          <td>5/5</td>
+          <td><span class="pill fixed">Corrected</span></td>
+          <td><a href="https://mcp-proxy-external.pitchbook.com/" target="_blank" rel="noreferrer">Source</a></td>
+        </tr>
+        <tr>
+          <th scope="row">91. NotebookLM</th>
+          <td>5/5</td>
+          <td>5/5</td>
+          <td><span class="pill clean">Clean</span></td>
+          <td><a href="https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/api-notebooks" target="_blank" rel="noreferrer">Source</a></td>
+        </tr>
+        <tr>
+          <th scope="row">98. Mermaid CLI</th>
+          <td>5/5</td>
+          <td>5/5</td>
+          <td><span class="pill clean">Clean</span></td>
+          <td><a href="https://github.com/mermaid-js/mermaid-cli" target="_blank" rel="noreferrer">Source</a></td>
+        </tr></tbody></table></div></article>
+        </div>
+      </section>
+      <section><div class="section-head"><h2>What failed honestly</h2><p>6 apps still failed after retries. They remain visible instead of being silently dropped.</p></div><ul class="failures"><li><strong>33. LinkedIn Ads</strong><span>No catalog-trusted source was selected</span></li><li><strong>34. GoHighLevel</strong><span>No catalog-trusted source was selected</span></li><li><strong>50. fanbasis</strong><span>No catalog-trusted source was selected</span></li><li><strong>73. Linear</strong><span>Composio search failed: Search request failed (HTTP 501): Sorry, we are unable to generate a response for this query with the available information.</span></li><li><strong>84. Paygent Connect</strong><span>No catalog-trusted source was selected</span></li><li><strong>85. iPayX</strong><span>No catalog-trusted source was selected</span></li></ul></section>
+      <section id="results">
+        <div class="section-head"><h2>All 100 apps</h2><p>Server-rendered in catalog order. Salesforce is row 1 even when JavaScript is disabled.</p></div>
+        <div class="controls"><input id="search" type="search" aria-label="Search apps" placeholder="Search app, auth, category, or blocker"><select id="category" aria-label="Filter category"><option value="">All categories</option><option value="CRM and Sales">CRM and Sales</option><option value="Support and Helpdesk">Support and Helpdesk</option><option value="Communications and Messaging">Communications and Messaging</option><option value="Marketing, Ads, Email and Social">Marketing, Ads, Email and Social</option><option value="Ecommerce">Ecommerce</option><option value="Data, SEO and Scraping">Data, SEO and Scraping</option><option value="Developer, Infra and Data platforms">Developer, Infra and Data platforms</option><option value="Productivity and Project Management">Productivity and Project Management</option><option value="Finance and Fintech">Finance and Fintech</option><option value="AI, Research and Media-native">AI, Research and Media-native</option></select><select id="verdict" aria-label="Filter verdict"><option value="">All verdicts</option><option value="yes">Build now</option><option value="conditional">Conditional</option><option value="unknown">Not proven</option></select></div>
+        <p class="results-meta"><strong id="result-count">100</strong> apps shown</p>
+        <div class="table-shell"><table class="apps-table"><thead><tr><th>#</th><th>App</th><th>Category</th><th>Status</th><th>Verdict</th><th>Auth</th><th>Access</th><th>Evidence</th></tr></thead><tbody id="app-rows">
+            <tr data-search="salesforce crm and sales oauth2 unknown " data-category="CRM and Sales" data-verdict="unknown">
+              <td>1</td>
+              <th scope="row">Salesforce</th>
+              <td>CRM and Sales</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>oauth2</td>
+              <td>unknown</td>
+              <td><a href="https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_oauth_and_connected_apps.htm" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="hubspot crm and sales oauth2; token; api_key unknown " data-category="CRM and Sales" data-verdict="unknown">
+              <td>2</td>
+              <th scope="row">HubSpot</th>
+              <td>CRM and Sales</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>oauth2, token, api_key</td>
+              <td>unknown</td>
+              <td><a href="https://developers.hubspot.com/docs/api-reference/latest/crm/using-object-apis" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="pipedrive crm and sales oauth2; api_key self_serve " data-category="CRM and Sales" data-verdict="yes">
+              <td>3</td>
+              <th scope="row">Pipedrive</th>
+              <td>CRM and Sales</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2, api_key</td>
+              <td>self serve</td>
+              <td><a href="https://developers.pipedrive.com/changelog/post/app-building-just-got-easier-with-developer-hub" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="attio crm and sales oauth2; api_key self_serve " data-category="CRM and Sales" data-verdict="yes">
+              <td>4</td>
+              <th scope="row">Attio</th>
+              <td>CRM and Sales</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2, api_key</td>
+              <td>self serve</td>
+              <td><a href="https://attio.com/help/reference/apps/generating-an-api-key" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="twenty crm and sales oauth2; api_key admin_required " data-category="CRM and Sales" data-verdict="conditional">
+              <td>5</td>
+              <th scope="row">Twenty</th>
+              <td>CRM and Sales</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>oauth2, api_key</td>
+              <td>admin required</td>
+              <td><a href="https://docs.twenty.com/developers/extend/api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="podio crm and sales unknown unknown " data-category="CRM and Sales" data-verdict="unknown">
+              <td>6</td>
+              <th scope="row">Podio</th>
+              <td>CRM and Sales</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>unknown</td>
+              <td>unknown</td>
+              <td><a href="https://podio.com/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="zoho crm crm and sales oauth2 self_serve " data-category="CRM and Sales" data-verdict="yes">
+              <td>7</td>
+              <th scope="row">Zoho CRM</th>
+              <td>CRM and Sales</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2</td>
+              <td>self serve</td>
+              <td><a href="https://www.zoho.com/crm/developer/docs/api/v8" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="close crm and sales api_key; oauth2 self_serve " data-category="CRM and Sales" data-verdict="yes">
+              <td>8</td>
+              <th scope="row">Close</th>
+              <td>CRM and Sales</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>api_key, oauth2</td>
+              <td>self serve</td>
+              <td><a href="https://close.com/api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="copper crm and sales api_key; oauth2 admin_required " data-category="CRM and Sales" data-verdict="conditional">
+              <td>9</td>
+              <th scope="row">Copper</th>
+              <td>CRM and Sales</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>api_key, oauth2</td>
+              <td>admin required</td>
+              <td><a href="https://developer.copper.com/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="dealcloud crm and sales oauth2 unknown " data-category="CRM and Sales" data-verdict="unknown">
+              <td>10</td>
+              <th scope="row">DealCloud</th>
+              <td>CRM and Sales</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>oauth2</td>
+              <td>unknown</td>
+              <td><a href="https://api.docs.dealcloud.com/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="zendesk support and helpdesk oauth2 admin_required " data-category="Support and Helpdesk" data-verdict="conditional">
+              <td>11</td>
+              <th scope="row">Zendesk</th>
+              <td>Support and Helpdesk</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>oauth2</td>
+              <td>admin required</td>
+              <td><a href="https://developer.zendesk.com/api-reference" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="intercom support and helpdesk token; oauth2 self_serve " data-category="Support and Helpdesk" data-verdict="conditional">
+              <td>12</td>
+              <th scope="row">Intercom</th>
+              <td>Support and Helpdesk</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>token, oauth2</td>
+              <td>self serve</td>
+              <td><a href="https://developers.intercom.com/docs/build-an-integration/getting-started" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="freshdesk support and helpdesk basic; api_key admin_required " data-category="Support and Helpdesk" data-verdict="conditional">
+              <td>13</td>
+              <th scope="row">Freshdesk</th>
+              <td>Support and Helpdesk</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>basic, api_key</td>
+              <td>admin required</td>
+              <td><a href="https://developer.freshdesk.com/api/v1" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="front support and helpdesk oauth2 unknown " data-category="Support and Helpdesk" data-verdict="unknown">
+              <td>14</td>
+              <th scope="row">Front</th>
+              <td>Support and Helpdesk</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>oauth2</td>
+              <td>unknown</td>
+              <td><a href="https://front.com/pricing" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="pylon support and helpdesk token admin_required " data-category="Support and Helpdesk" data-verdict="conditional">
+              <td>15</td>
+              <th scope="row">Pylon</th>
+              <td>Support and Helpdesk</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>token</td>
+              <td>admin required</td>
+              <td><a href="https://docs.usepylon.com/pylon-docs/developer" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="liveagent support and helpdesk api_key admin_required " data-category="Support and Helpdesk" data-verdict="conditional">
+              <td>16</td>
+              <th scope="row">LiveAgent</th>
+              <td>Support and Helpdesk</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>api_key</td>
+              <td>admin required</td>
+              <td><a href="https://faq.liveagent.com/535002-LiveAgent-API-v1-vs-v3-Authentication-Differences-API-Key-Management-and-Resolving-403-Errors" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="plain support and helpdesk api_key unknown " data-category="Support and Helpdesk" data-verdict="unknown">
+              <td>17</td>
+              <th scope="row">Plain</th>
+              <td>Support and Helpdesk</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>api_key</td>
+              <td>unknown</td>
+              <td><a href="https://help.plain.com/article/creating-api-keys" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="help scout support and helpdesk oauth2; api_key admin_required oauth integrations require creating an oauth2 application, and credentials must be associated with an active, invited help scout user; docs api keys require a specific administrator-granted permission." data-category="Support and Helpdesk" data-verdict="conditional">
+              <td>18</td>
+              <th scope="row">Help Scout</th>
+              <td>Support and Helpdesk</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>oauth2, api_key</td>
+              <td>admin required</td>
+              <td><a href="https://developer.helpscout.com/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="gorgias support and helpdesk oauth2; basic admin_required " data-category="Support and Helpdesk" data-verdict="conditional">
+              <td>19</td>
+              <th scope="row">Gorgias</th>
+              <td>Support and Helpdesk</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>oauth2, basic</td>
+              <td>admin required</td>
+              <td><a href="https://developers.gorgias.com/docs/5-submit-app-for-review" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="gladly support and helpdesk token admin_required " data-category="Support and Helpdesk" data-verdict="conditional">
+              <td>20</td>
+              <th scope="row">Gladly</th>
+              <td>Support and Helpdesk</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>token</td>
+              <td>admin required</td>
+              <td><a href="https://developer.gladly.com/rest" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="slack communications and messaging token unknown " data-category="Communications and Messaging" data-verdict="unknown">
+              <td>21</td>
+              <th scope="row">Slack</th>
+              <td>Communications and Messaging</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>token</td>
+              <td>unknown</td>
+              <td><a href="https://api.dev.slack.com/partners/email-upload" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="twilio communications and messaging oauth2; api_key; basic self_serve " data-category="Communications and Messaging" data-verdict="yes">
+              <td>22</td>
+              <th scope="row">Twilio</th>
+              <td>Communications and Messaging</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2, api_key, basic</td>
+              <td>self serve</td>
+              <td><a href="https://www.twilio.com/docs/ai/mcp" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="zoho cliq communications and messaging oauth2; token self_serve " data-category="Communications and Messaging" data-verdict="yes">
+              <td>23</td>
+              <th scope="row">Zoho Cliq</th>
+              <td>Communications and Messaging</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2, token</td>
+              <td>self serve</td>
+              <td><a href="https://www.zoho.com/cliq/help/platform/zoho-cliq-mcp.html" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="lark (larksuite) communications and messaging token self_serve " data-category="Communications and Messaging" data-verdict="yes">
+              <td>24</td>
+              <th scope="row">Lark (Larksuite)</th>
+              <td>Communications and Messaging</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>token</td>
+              <td>self serve</td>
+              <td><a href="https://open.larksuite.com/document/uAjLw4CM/ukTMukTMukTM/mcp_integration/mcp_installation" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="pumble communications and messaging api_key; token self_serve " data-category="Communications and Messaging" data-verdict="yes">
+              <td>25</td>
+              <th scope="row">Pumble</th>
+              <td>Communications and Messaging</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>api_key, token</td>
+              <td>self serve</td>
+              <td><a href="https://docs.pumble.com/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="discord communications and messaging oauth2; token; none self_serve " data-category="Communications and Messaging" data-verdict="yes">
+              <td>26</td>
+              <th scope="row">Discord</th>
+              <td>Communications and Messaging</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2, token, none</td>
+              <td>self serve</td>
+              <td><a href="https://docs.discord.com/developers/platform/oauth2-and-permissions" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="telegram communications and messaging unknown self_serve " data-category="Communications and Messaging" data-verdict="yes">
+              <td>27</td>
+              <th scope="row">Telegram</th>
+              <td>Communications and Messaging</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>unknown</td>
+              <td>self serve</td>
+              <td><a href="https://core.telegram.org/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="whatsapp business communications and messaging token self_serve " data-category="Communications and Messaging" data-verdict="yes">
+              <td>28</td>
+              <th scope="row">WhatsApp Business</th>
+              <td>Communications and Messaging</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>token</td>
+              <td>self serve</td>
+              <td><a href="https://developers.facebook.com/docs/whatsapp/cloud-api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="aircall communications and messaging basic self_serve " data-category="Communications and Messaging" data-verdict="yes">
+              <td>29</td>
+              <th scope="row">Aircall</th>
+              <td>Communications and Messaging</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>basic</td>
+              <td>self serve</td>
+              <td><a href="https://aircall.io/pricing" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="vonage communications and messaging api_key; basic; token; other self_serve " data-category="Communications and Messaging" data-verdict="yes">
+              <td>30</td>
+              <th scope="row">Vonage</th>
+              <td>Communications and Messaging</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>api_key, basic, token, other</td>
+              <td>self serve</td>
+              <td><a href="https://developer.vonage.com/en/api/messages" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="google ads marketing, ads, email and social oauth2; token unknown " data-category="Marketing, Ads, Email and Social" data-verdict="conditional">
+              <td>31</td>
+              <th scope="row">Google Ads</th>
+              <td>Marketing, Ads, Email and Social</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>oauth2, token</td>
+              <td>unknown</td>
+              <td><a href="https://developers.google.com/google-ads/api/docs/concepts/call-structure" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="meta ads marketing, ads, email and social unknown self_serve " data-category="Marketing, Ads, Email and Social" data-verdict="yes">
+              <td>32</td>
+              <th scope="row">Meta Ads</th>
+              <td>Marketing, Ads, Email and Social</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>unknown</td>
+              <td>self serve</td>
+              <td><a href="https://developers.facebook.com/docs/marketing-api/get-started" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="linkedin ads marketing, ads, email and social unknown unknown no catalog-trusted source was selected" data-category="Marketing, Ads, Email and Social" data-verdict="unknown">
+              <td>33</td>
+              <th scope="row">LinkedIn Ads</th>
+              <td>Marketing, Ads, Email and Social</td>
+              <td><span class="pill status-failed_after_retries">Retrieval failed</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>unknown</td>
+              <td>unknown</td>
+              <td><span class="muted">No source</span></td>
+            </tr>
+            <tr data-search="gohighlevel marketing, ads, email and social unknown unknown no catalog-trusted source was selected" data-category="Marketing, Ads, Email and Social" data-verdict="unknown">
+              <td>34</td>
+              <th scope="row">GoHighLevel</th>
+              <td>Marketing, Ads, Email and Social</td>
+              <td><span class="pill status-failed_after_retries">Retrieval failed</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>unknown</td>
+              <td>unknown</td>
+              <td><span class="muted">No source</span></td>
+            </tr>
+            <tr data-search="mailchimp marketing, ads, email and social oauth2; api_key self_serve " data-category="Marketing, Ads, Email and Social" data-verdict="yes">
+              <td>35</td>
+              <th scope="row">Mailchimp</th>
+              <td>Marketing, Ads, Email and Social</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2, api_key</td>
+              <td>self serve</td>
+              <td><a href="https://mailchimp.com/developer/marketing/api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="klaviyo marketing, ads, email and social oauth2; api_key admin_required " data-category="Marketing, Ads, Email and Social" data-verdict="conditional">
+              <td>36</td>
+              <th scope="row">Klaviyo</th>
+              <td>Marketing, Ads, Email and Social</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>oauth2, api_key</td>
+              <td>admin required</td>
+              <td><a href="https://developers.klaviyo.com/en/docs/authenticate_" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="systeme.io marketing, ads, email and social api_key self_serve " data-category="Marketing, Ads, Email and Social" data-verdict="yes">
+              <td>37</td>
+              <th scope="row">systeme.io</th>
+              <td>Marketing, Ads, Email and Social</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>api_key</td>
+              <td>self serve</td>
+              <td><a href="https://developer.systeme.io/reference/api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="pinterest marketing, ads, email and social oauth2 unknown " data-category="Marketing, Ads, Email and Social" data-verdict="unknown">
+              <td>38</td>
+              <th scope="row">Pinterest</th>
+              <td>Marketing, Ads, Email and Social</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>oauth2</td>
+              <td>unknown</td>
+              <td><a href="https://developers.pinterest.com/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="threads (meta) marketing, ads, email and social oauth2 self_serve " data-category="Marketing, Ads, Email and Social" data-verdict="yes">
+              <td>39</td>
+              <th scope="row">Threads (Meta)</th>
+              <td>Marketing, Ads, Email and Social</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2</td>
+              <td>self serve</td>
+              <td><a href="https://developers.facebook.com/docs/threads" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="sendgrid marketing, ads, email and social api_key self_serve " data-category="Marketing, Ads, Email and Social" data-verdict="yes">
+              <td>40</td>
+              <th scope="row">SendGrid</th>
+              <td>Marketing, Ads, Email and Social</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>api_key</td>
+              <td>self serve</td>
+              <td><a href="https://docs.sendgrid.com/api-reference/api-keys/delete-api-keys" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="shopify ecommerce oauth2; token self_serve " data-category="Ecommerce" data-verdict="conditional">
+              <td>41</td>
+              <th scope="row">Shopify</th>
+              <td>Ecommerce</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>oauth2, token</td>
+              <td>self serve</td>
+              <td><a href="https://shopify.dev/docs/api/app-ui/using-mcp" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="woocommerce ecommerce api_key; basic; other admin_required " data-category="Ecommerce" data-verdict="conditional">
+              <td>42</td>
+              <th scope="row">WooCommerce</th>
+              <td>Ecommerce</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>api_key, basic, other</td>
+              <td>admin required</td>
+              <td><a href="https://developer.woocommerce.com/docs/apis" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="bigcommerce ecommerce token unknown " data-category="Ecommerce" data-verdict="unknown">
+              <td>43</td>
+              <th scope="row">BigCommerce</th>
+              <td>Ecommerce</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>token</td>
+              <td>unknown</td>
+              <td><a href="https://developer.bigcommerce.com/api-docs/storefront/tutorials/working-sf-apis" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="salesforce commerce cloud ecommerce basic admin_required " data-category="Ecommerce" data-verdict="conditional">
+              <td>44</td>
+              <th scope="row">Salesforce Commerce Cloud</th>
+              <td>Ecommerce</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>basic</td>
+              <td>admin required</td>
+              <td><a href="https://developer.salesforce.com/docs/commerce/b2c-commerce/guide/custom-apis.html" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="magento (adobe commerce) ecommerce other; token admin_required " data-category="Ecommerce" data-verdict="conditional">
+              <td>45</td>
+              <th scope="row">Magento (Adobe Commerce)</th>
+              <td>Ecommerce</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>other, token</td>
+              <td>admin required</td>
+              <td><a href="https://developer.adobe.com/commerce/webapi/get-started" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="squarespace ecommerce api_key; oauth2 unknown " data-category="Ecommerce" data-verdict="unknown">
+              <td>46</td>
+              <th scope="row">Squarespace</th>
+              <td>Ecommerce</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>api_key, oauth2</td>
+              <td>unknown</td>
+              <td><a href="https://developers.squarespace.com/commerce-apis/authentication-and-permissions" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="ecwid ecommerce unknown unknown " data-category="Ecommerce" data-verdict="unknown">
+              <td>47</td>
+              <th scope="row">Ecwid</th>
+              <td>Ecommerce</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>unknown</td>
+              <td>unknown</td>
+              <td><a href="https://api-docs.ecwid.com/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="gumroad ecommerce oauth2 self_serve " data-category="Ecommerce" data-verdict="yes">
+              <td>48</td>
+              <th scope="row">Gumroad</th>
+              <td>Ecommerce</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2</td>
+              <td>self serve</td>
+              <td><a href="https://gumroad.com/api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="amazon selling partner ecommerce oauth2 vendor_approval " data-category="Ecommerce" data-verdict="conditional">
+              <td>49</td>
+              <th scope="row">Amazon Selling Partner</th>
+              <td>Ecommerce</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>oauth2</td>
+              <td>vendor approval</td>
+              <td><a href="https://developer-docs.amazon.com/sp-api/docs/connecting-to-the-selling-partner-api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="fanbasis ecommerce unknown unknown no catalog-trusted source was selected" data-category="Ecommerce" data-verdict="unknown">
+              <td>50</td>
+              <th scope="row">fanbasis</th>
+              <td>Ecommerce</td>
+              <td><span class="pill status-failed_after_retries">Retrieval failed</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>unknown</td>
+              <td>unknown</td>
+              <td><span class="muted">No source</span></td>
+            </tr>
+            <tr data-search="dataforseo data, seo and scraping basic self_serve " data-category="Data, SEO and Scraping" data-verdict="yes">
+              <td>51</td>
+              <th scope="row">DataForSEO</th>
+              <td>Data, SEO and Scraping</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>basic</td>
+              <td>self serve</td>
+              <td><a href="https://docs.dataforseo.com/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="se ranking data, seo and scraping api_key self_serve " data-category="Data, SEO and Scraping" data-verdict="yes">
+              <td>52</td>
+              <th scope="row">SE Ranking</th>
+              <td>Data, SEO and Scraping</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>api_key</td>
+              <td>self serve</td>
+              <td><a href="https://seranking.com/api-pricing.html" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="ahrefs data, seo and scraping unknown unknown production activation requires submitting the integration for verification; new products also require an ahrefs enterprise subscription before activation." data-category="Data, SEO and Scraping" data-verdict="conditional">
+              <td>53</td>
+              <th scope="row">Ahrefs</th>
+              <td>Data, SEO and Scraping</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>unknown</td>
+              <td>unknown</td>
+              <td><a href="https://docs.ahrefs.com/ahrefs-connect/docs/approval-process" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="mrscraper data, seo and scraping api_key self_serve " data-category="Data, SEO and Scraping" data-verdict="yes">
+              <td>54</td>
+              <th scope="row">MrScraper</th>
+              <td>Data, SEO and Scraping</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>api_key</td>
+              <td>self serve</td>
+              <td><a href="https://docs.mrscraper.com/docs/api/authentication" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="apify data, seo and scraping unknown unknown " data-category="Data, SEO and Scraping" data-verdict="unknown">
+              <td>55</td>
+              <th scope="row">Apify</th>
+              <td>Data, SEO and Scraping</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>unknown</td>
+              <td>unknown</td>
+              <td><a href="https://docs.apify.com/api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="firecrawl data, seo and scraping api_key self_serve " data-category="Data, SEO and Scraping" data-verdict="yes">
+              <td>56</td>
+              <th scope="row">Firecrawl</th>
+              <td>Data, SEO and Scraping</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>api_key</td>
+              <td>self serve</td>
+              <td><a href="https://docs.firecrawl.dev/api-reference/endpoint/search" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="bright data data, seo and scraping api_key self_serve " data-category="Data, SEO and Scraping" data-verdict="yes">
+              <td>57</td>
+              <th scope="row">Bright Data</th>
+              <td>Data, SEO and Scraping</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>api_key</td>
+              <td>self serve</td>
+              <td><a href="https://docs.brightdata.com/ai/mcp-server/overview" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="sherlock data, seo and scraping none not_required " data-category="Data, SEO and Scraping" data-verdict="unknown">
+              <td>58</td>
+              <th scope="row">Sherlock</th>
+              <td>Data, SEO and Scraping</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>none</td>
+              <td>not required</td>
+              <td><a href="https://github.com/sherlock-project/sherlock/blob/master/docs/README.md" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="waterfall.io data, seo and scraping api_key contact_sales api access requires a contract-provided key, and some key-management functionality may require account-manager enablement or an upgrade." data-category="Data, SEO and Scraping" data-verdict="conditional">
+              <td>59</td>
+              <th scope="row">Waterfall.io</th>
+              <td>Data, SEO and Scraping</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>api_key</td>
+              <td>contact sales</td>
+              <td><a href="https://docs.waterfall.io/v1/api-keys-create" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="clay data, seo and scraping api_key; oauth2 unknown " data-category="Data, SEO and Scraping" data-verdict="unknown">
+              <td>60</td>
+              <th scope="row">Clay</th>
+              <td>Data, SEO and Scraping</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>api_key, oauth2</td>
+              <td>unknown</td>
+              <td><a href="https://developers.clay.com/routines/api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="github developer, infra and data platforms token; basic self_serve " data-category="Developer, Infra and Data platforms" data-verdict="yes">
+              <td>61</td>
+              <th scope="row">GitHub</th>
+              <td>Developer, Infra and Data platforms</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>token, basic</td>
+              <td>self serve</td>
+              <td><a href="https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="vercel developer, infra and data platforms oauth2 unknown " data-category="Developer, Infra and Data platforms" data-verdict="conditional">
+              <td>62</td>
+              <th scope="row">Vercel</th>
+              <td>Developer, Infra and Data platforms</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>oauth2</td>
+              <td>unknown</td>
+              <td><a href="https://vercel.com/docs/accounts/access-tokens" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="netlify developer, infra and data platforms oauth2 self_serve " data-category="Developer, Infra and Data platforms" data-verdict="yes">
+              <td>63</td>
+              <th scope="row">Netlify</th>
+              <td>Developer, Infra and Data platforms</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2</td>
+              <td>self serve</td>
+              <td><a href="https://docs.netlify.com/api-and-cli-guides/api-guides/get-started-with-api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="cloudflare developer, infra and data platforms token; api_key self_serve " data-category="Developer, Infra and Data platforms" data-verdict="yes">
+              <td>64</td>
+              <th scope="row">Cloudflare</th>
+              <td>Developer, Infra and Data platforms</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>token, api_key</td>
+              <td>self serve</td>
+              <td><a href="https://developers.cloudflare.com/api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="supabase developer, infra and data platforms oauth2 self_serve " data-category="Developer, Infra and Data platforms" data-verdict="yes">
+              <td>65</td>
+              <th scope="row">Supabase</th>
+              <td>Developer, Infra and Data platforms</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2</td>
+              <td>self serve</td>
+              <td><a href="https://supabase.com/docs/guides/ai-tools/mcp" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="neo4j developer, infra and data platforms basic; token unknown " data-category="Developer, Infra and Data platforms" data-verdict="unknown">
+              <td>66</td>
+              <th scope="row">Neo4j</th>
+              <td>Developer, Infra and Data platforms</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>basic, token</td>
+              <td>unknown</td>
+              <td><a href="https://neo4j.com/docs/api/java-driver/current" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="snowflake developer, infra and data platforms oauth2; token; other unknown " data-category="Developer, Infra and Data platforms" data-verdict="unknown">
+              <td>67</td>
+              <th scope="row">Snowflake</th>
+              <td>Developer, Infra and Data platforms</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>oauth2, token, other</td>
+              <td>unknown</td>
+              <td><a href="https://docs.snowflake.com/en/developer-guide/sql-api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="mongodb atlas developer, infra and data platforms oauth2; api_key admin_required " data-category="Developer, Infra and Data platforms" data-verdict="conditional">
+              <td>68</td>
+              <th scope="row">MongoDB Atlas</th>
+              <td>Developer, Infra and Data platforms</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>oauth2, api_key</td>
+              <td>admin required</td>
+              <td><a href="https://www.mongodb.com/docs/atlas/api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="datadog developer, infra and data platforms api_key; oauth2 unknown " data-category="Developer, Infra and Data platforms" data-verdict="unknown">
+              <td>69</td>
+              <th scope="row">Datadog</th>
+              <td>Developer, Infra and Data platforms</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>api_key, oauth2</td>
+              <td>unknown</td>
+              <td><a href="https://docs.datadoghq.com/api/latest.md" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="sentry developer, infra and data platforms token; api_key self_serve " data-category="Developer, Infra and Data platforms" data-verdict="yes">
+              <td>70</td>
+              <th scope="row">Sentry</th>
+              <td>Developer, Infra and Data platforms</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>token, api_key</td>
+              <td>self serve</td>
+              <td><a href="https://docs.sentry.io/api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="notion productivity and project management token self_serve " data-category="Productivity and Project Management" data-verdict="yes">
+              <td>71</td>
+              <th scope="row">Notion</th>
+              <td>Productivity and Project Management</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>token</td>
+              <td>self serve</td>
+              <td><a href="https://developers.notion.com/cli/get-started/overview" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="airtable productivity and project management token self_serve " data-category="Productivity and Project Management" data-verdict="yes">
+              <td>72</td>
+              <th scope="row">Airtable</th>
+              <td>Productivity and Project Management</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>token</td>
+              <td>self serve</td>
+              <td><a href="https://airtable.com/developers/web/api/authentication" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="linear productivity and project management unknown unknown composio search failed: search request failed (http 501): sorry, we are unable to generate a response for this query with the available information." data-category="Productivity and Project Management" data-verdict="unknown">
+              <td>73</td>
+              <th scope="row">Linear</th>
+              <td>Productivity and Project Management</td>
+              <td><span class="pill status-failed_after_retries">Retrieval failed</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>unknown</td>
+              <td>unknown</td>
+              <td><span class="muted">No source</span></td>
+            </tr>
+            <tr data-search="jira productivity and project management oauth2; basic; token self_serve " data-category="Productivity and Project Management" data-verdict="yes">
+              <td>74</td>
+              <th scope="row">Jira</th>
+              <td>Productivity and Project Management</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2, basic, token</td>
+              <td>self serve</td>
+              <td><a href="https://developer.atlassian.com/cloud/jira/platform/oauth-2-3lo-apps" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="asana productivity and project management token self_serve " data-category="Productivity and Project Management" data-verdict="yes">
+              <td>75</td>
+              <th scope="row">Asana</th>
+              <td>Productivity and Project Management</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>token</td>
+              <td>self serve</td>
+              <td><a href="https://developers.asana.com/docs/mcp-server" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="monday.com productivity and project management oauth2; token self_serve " data-category="Productivity and Project Management" data-verdict="yes">
+              <td>76</td>
+              <th scope="row">Monday.com</th>
+              <td>Productivity and Project Management</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2, token</td>
+              <td>self serve</td>
+              <td><a href="https://developer.monday.com/api-reference" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="clickup productivity and project management oauth2 self_serve " data-category="Productivity and Project Management" data-verdict="yes">
+              <td>77</td>
+              <th scope="row">ClickUp</th>
+              <td>Productivity and Project Management</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2</td>
+              <td>self serve</td>
+              <td><a href="https://clickup.com/api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="coda productivity and project management token; oauth2 unknown " data-category="Productivity and Project Management" data-verdict="unknown">
+              <td>78</td>
+              <th scope="row">Coda</th>
+              <td>Productivity and Project Management</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>token, oauth2</td>
+              <td>unknown</td>
+              <td><a href="https://coda.io/apis/v1/openapi.yaml" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="smartsheet productivity and project management api_key; oauth2 self_serve " data-category="Productivity and Project Management" data-verdict="yes">
+              <td>79</td>
+              <th scope="row">Smartsheet</th>
+              <td>Productivity and Project Management</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>api_key, oauth2</td>
+              <td>self serve</td>
+              <td><a href="https://developers.smartsheet.com/ai-mcp/smartsheet/mcp-server" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="harvest productivity and project management token; oauth2 self_serve " data-category="Productivity and Project Management" data-verdict="yes">
+              <td>80</td>
+              <th scope="row">Harvest</th>
+              <td>Productivity and Project Management</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>token, oauth2</td>
+              <td>self serve</td>
+              <td><a href="https://help.getharvest.com/api-v2/authentication-api/authentication/authentication" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="stripe finance and fintech api_key unknown " data-category="Finance and Fintech" data-verdict="unknown">
+              <td>81</td>
+              <th scope="row">Stripe</th>
+              <td>Finance and Fintech</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>api_key</td>
+              <td>unknown</td>
+              <td><a href="https://docs.stripe.com/api/authentication" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="plaid finance and fintech oauth2 self_serve " data-category="Finance and Fintech" data-verdict="conditional">
+              <td>82</td>
+              <th scope="row">Plaid</th>
+              <td>Finance and Fintech</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>oauth2</td>
+              <td>self serve</td>
+              <td><a href="https://plaid.com/docs/api" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="binance finance and fintech api_key unknown " data-category="Finance and Fintech" data-verdict="unknown">
+              <td>83</td>
+              <th scope="row">Binance</th>
+              <td>Finance and Fintech</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>api_key</td>
+              <td>unknown</td>
+              <td><a href="https://binance-docs.github.io/apiAgent-API-EN" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="paygent connect finance and fintech unknown unknown no catalog-trusted source was selected" data-category="Finance and Fintech" data-verdict="unknown">
+              <td>84</td>
+              <th scope="row">Paygent Connect</th>
+              <td>Finance and Fintech</td>
+              <td><span class="pill status-failed_after_retries">Retrieval failed</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>unknown</td>
+              <td>unknown</td>
+              <td><span class="muted">No source</span></td>
+            </tr>
+            <tr data-search="ipayx finance and fintech unknown unknown no catalog-trusted source was selected" data-category="Finance and Fintech" data-verdict="unknown">
+              <td>85</td>
+              <th scope="row">iPayX</th>
+              <td>Finance and Fintech</td>
+              <td><span class="pill status-failed_after_retries">Retrieval failed</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>unknown</td>
+              <td>unknown</td>
+              <td><span class="muted">No source</span></td>
+            </tr>
+            <tr data-search="quickbooks finance and fintech oauth2 self_serve " data-category="Finance and Fintech" data-verdict="yes">
+              <td>86</td>
+              <th scope="row">QuickBooks</th>
+              <td>Finance and Fintech</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2</td>
+              <td>self serve</td>
+              <td><a href="https://developer.intuit.com/app/developer/qbo/docs/develop/authentication-and-authorization/faq" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="xero finance and fintech oauth2 self_serve " data-category="Finance and Fintech" data-verdict="yes">
+              <td>87</td>
+              <th scope="row">Xero</th>
+              <td>Finance and Fintech</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>oauth2</td>
+              <td>self serve</td>
+              <td><a href="https://developer.xero.com/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="brex finance and fintech token; oauth2; api_key admin_required " data-category="Finance and Fintech" data-verdict="conditional">
+              <td>88</td>
+              <th scope="row">Brex</th>
+              <td>Finance and Fintech</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>token, oauth2, api_key</td>
+              <td>admin required</td>
+              <td><a href="https://developer.brex.com/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="ramp finance and fintech oauth2 unknown " data-category="Finance and Fintech" data-verdict="unknown">
+              <td>89</td>
+              <th scope="row">Ramp</th>
+              <td>Finance and Fintech</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>oauth2</td>
+              <td>unknown</td>
+              <td><a href="https://docs.ramp.com/developer-api/v1/authorization" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="pitchbook finance and fintech unknown unknown " data-category="Finance and Fintech" data-verdict="unknown">
+              <td>90</td>
+              <th scope="row">PitchBook</th>
+              <td>Finance and Fintech</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>unknown</td>
+              <td>unknown</td>
+              <td><a href="https://mcp-proxy-external.pitchbook.com/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="notebooklm ai, research and media-native token admin_required " data-category="AI, Research and Media-native" data-verdict="conditional">
+              <td>91</td>
+              <th scope="row">NotebookLM</th>
+              <td>AI, Research and Media-native</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>token</td>
+              <td>admin required</td>
+              <td><a href="https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/api-audio-overview" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="otter ai ai, research and media-native api_key self_serve public api access is limited to enterprise workspaces; the supplied sources do not establish whether additional production approval is required." data-category="AI, Research and Media-native" data-verdict="conditional">
+              <td>92</td>
+              <th scope="row">Otter AI</th>
+              <td>AI, Research and Media-native</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-conditional">Conditional</span></td>
+              <td>api_key</td>
+              <td>self serve</td>
+              <td><a href="https://help.otter.ai/hc/en-us/articles/27616131311127-Zapier-Otter-ai-Integration" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="fathom ai, research and media-native oauth2 unknown " data-category="AI, Research and Media-native" data-verdict="unknown">
+              <td>93</td>
+              <th scope="row">Fathom</th>
+              <td>AI, Research and Media-native</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-unknown">Not proven</span></td>
+              <td>oauth2</td>
+              <td>unknown</td>
+              <td><a href="https://help.fathom.video/en/articles/11497793" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="consensus ai, research and media-native unknown self_serve " data-category="AI, Research and Media-native" data-verdict="yes">
+              <td>94</td>
+              <th scope="row">Consensus</th>
+              <td>AI, Research and Media-native</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>unknown</td>
+              <td>self serve</td>
+              <td><a href="https://consensus.app/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="reducto ai, research and media-native api_key self_serve " data-category="AI, Research and Media-native" data-verdict="yes">
+              <td>95</td>
+              <th scope="row">Reducto</th>
+              <td>AI, Research and Media-native</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>api_key</td>
+              <td>self serve</td>
+              <td><a href="https://docs.reducto.ai/api-reference/parse" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="devin ai, research and media-native api_key; token self_serve " data-category="AI, Research and Media-native" data-verdict="yes">
+              <td>96</td>
+              <th scope="row">Devin</th>
+              <td>AI, Research and Media-native</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>api_key, token</td>
+              <td>self serve</td>
+              <td><a href="https://docs.devin.ai/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="higgsfield ai, research and media-native api_key self_serve " data-category="AI, Research and Media-native" data-verdict="yes">
+              <td>97</td>
+              <th scope="row">higgsfield</th>
+              <td>AI, Research and Media-native</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>api_key</td>
+              <td>self serve</td>
+              <td><a href="https://docs.higgsfield.ai/docs" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="mermaid cli ai, research and media-native none not_required " data-category="AI, Research and Media-native" data-verdict="yes">
+              <td>98</td>
+              <th scope="row">Mermaid CLI</th>
+              <td>AI, Research and Media-native</td>
+              <td><span class="pill status-verified">Verified</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>none</td>
+              <td>not required</td>
+              <td><a href="https://github.com/mermaid-js/mermaid-cli" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="youtube transcript ai, research and media-native unknown self_serve " data-category="AI, Research and Media-native" data-verdict="yes">
+              <td>99</td>
+              <th scope="row">YouTube Transcript</th>
+              <td>AI, Research and Media-native</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>unknown</td>
+              <td>self serve</td>
+              <td><a href="https://transcriptapi.com/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr>
+            <tr data-search="grain ai, research and media-native token self_serve " data-category="AI, Research and Media-native" data-verdict="yes">
+              <td>100</td>
+              <th scope="row">Grain</th>
+              <td>AI, Research and Media-native</td>
+              <td><span class="pill status-needs_human_review">Human review</span></td>
+              <td><span class="pill verdict-yes">Build now</span></td>
+              <td>token</td>
+              <td>self serve</td>
+              <td><a href="https://developers.grain.com/" target="_blank" rel="noreferrer">Open</a></td>
+            </tr></tbody></table></div>
+      </section>
+    </main>
+    <footer>Evidence-backed integration research · 100 attempted · 94 accepted · 6 failed after retries · August 2026</footer>
+  </div>
+  <script>
+    const search = document.querySelector('#search');
+    const category = document.querySelector('#category');
+    const verdict = document.querySelector('#verdict');
+    const rows = [...document.querySelectorAll('#app-rows tr')];
+    const count = document.querySelector('#result-count');
+    function filterRows() {
+      const query = search.value.trim().toLowerCase();
+      let visible = 0;
+      for (const row of rows) {
+        const show = (!query || row.dataset.search.includes(query)) && (!category.value || row.dataset.category === category.value) && (!verdict.value || row.dataset.verdict === verdict.value);
+        row.hidden = !show;
+        if (show) visible += 1;
+      }
+      count.textContent = visible;
+    }
+    for (const control of [search, category, verdict]) control.addEventListener('input', filterRows);
+  </script>
+</body>
+</html>

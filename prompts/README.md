@@ -1,5 +1,9 @@
 # Prompts
 
-`extract.md` is the versioned Milestone 1 prompt for one tool-free structured extraction over fetched GitHub sources.
+`extract.md` is the versioned prompt for tool-free structured extraction over
+deterministically generated evidence snippets from fetched catalog-trusted sources. `audit.md`
+independently checks claim-to-evidence support without tools or browsing.
 
-The future verifier prompt is intentionally absent. MCP verification and Browser Tool fallback are outside Milestone 1.
+The bounded recovery pass reuses these prompts after targeted Composio Search and fetch calls, then
+deterministically admits changes only to disputed fields. A future MCP verifier prompt and Browser
+Tool fallback remain intentionally separate from this minimum repair.

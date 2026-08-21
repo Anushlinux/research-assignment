@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import re
 
-from integration_research.models import FetchedSource
+from integration_research.models import EvidenceSnippet, FetchedSource
+from integration_research.validation import normalize_evidence_text
 
 RELEVANT_TERMS: tuple[str, ...] = (
     "api",
@@ -81,17 +82,79 @@ def reduce_sources(
     return reduced
 
 
-def build_source_package(sources: list[FetchedSource], reduced: dict[str, str]) -> str:
+def _bounded_snippet_parts(text: str, *, limit: int = 500) -> list[str]:
+    visible = normalize_evidence_text(text)
+    if not visible:
+        return []
+    if len(visible) <= limit:
+        return [visible]
+    sentences = [
+        sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", visible) if sentence.strip()
+    ]
+    parts: list[str] = []
+    for sentence in sentences:
+        while len(sentence) > limit:
+            boundary = sentence.rfind(" ", 0, limit + 1)
+            if boundary <= 0:
+                boundary = limit
+            parts.append(sentence[:boundary].strip())
+            sentence = sentence[boundary:].strip()
+        if sentence:
+            parts.append(sentence)
+    return parts
+
+
+def build_evidence_snippets(
+    sources: list[FetchedSource], reduced: dict[str, str]
+) -> dict[str, EvidenceSnippet]:
+    """Create exact, bounded evidence choices that the model references by stable ID."""
+
+    snippets: dict[str, EvidenceSnippet] = {}
+    for source in sources:
+        seen: set[str] = set()
+        source_snippets: list[str] = []
+        # Keep soft line wraps inside one paragraph. Documentation renderers often wrap Markdown
+        # links across lines; splitting every line can create malformed snippets such as
+        # ``[HTTP Basic`` that no longer match the normalized source text.
+        blocks = re.split(r"\n\s*\n", reduced[source.source_id])
+        for block in blocks:
+            for part in _bounded_snippet_parts(block):
+                if part in seen:
+                    continue
+                seen.add(part)
+                source_snippets.append(part)
+        for index, text in enumerate(source_snippets, start=1):
+            snippet = EvidenceSnippet(
+                snippet_id=f"{source.source_id}_snippet_{index:03d}",
+                source_id=source.source_id,
+                text=text,
+            )
+            snippets[snippet.snippet_id] = snippet
+    return snippets
+
+
+def build_source_package(sources: list[FetchedSource], snippets: dict[str, EvidenceSnippet]) -> str:
     sections: list[str] = []
     for source in sources:
+        source_snippets = [
+            snippet for snippet in snippets.values() if snippet.source_id == source.source_id
+        ]
+        snippet_text = "\n".join(
+            f"SNIPPET {snippet.snippet_id}: {snippet.text}" for snippet in source_snippets
+        )
         sections.append(
+            # A fetched page may be the independently selected source for several evidence roles.
             "\n".join(
                 (
                     f"SOURCE {source.source_id}",
                     f"URL: {source.url}",
                     f"TITLE: {source.title}",
+                    "ROLES: "
+                    + ", ".join(
+                        role.value for role in (source.source_roles or [source.source_role])
+                    ),
                     "",
-                    reduced[source.source_id],
+                    snippet_text,
                 )
             )
         )

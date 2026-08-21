@@ -1,0 +1,130 @@
+{
+  "method": "Twelve-app source audit covering all ten categories. Five material claims per app were compared with the stored excerpts fetched from official documentation. Partial or unsupported claims count as misses.",
+  "scope": "Evidence agreement, not a global factual-accuracy estimate for all 100 apps.",
+  "checked_at": "2026-08-22",
+  "claims_checked": 60,
+  "first_pass_supported": 52,
+  "final_supported": 60,
+  "apps": [
+    {
+      "id": 3,
+      "app": "Pipedrive",
+      "category": "CRM and Sales",
+      "first_pass_supported": 3,
+      "final_supported": 5,
+      "result": "corrected",
+      "finding": "The draft bundled OAuth into a description without matching evidence and inferred a paid-plan requirement that the source did not prove.",
+      "evidence_url": "https://developers.pipedrive.com/docs/api/v1"
+    },
+    {
+      "id": 13,
+      "app": "Freshdesk",
+      "category": "Support and Helpdesk",
+      "first_pass_supported": 5,
+      "final_supported": 5,
+      "result": "clean",
+      "finding": "The sampled authentication, access, API, MCP and buildability claims matched the fetched official excerpts.",
+      "evidence_url": "https://support.freshdesk.com/support/solutions/articles/225435-where-can-i-find-my-api-key-"
+    },
+    {
+      "id": 22,
+      "app": "Twilio",
+      "category": "Communications and Messaging",
+      "first_pass_supported": 4,
+      "final_supported": 5,
+      "result": "corrected",
+      "finding": "The draft description generalized beyond the messaging products established by the supplied source.",
+      "evidence_url": "https://www.twilio.com/docs/ai/mcp"
+    },
+    {
+      "id": 31,
+      "app": "Google Ads",
+      "category": "Marketing, Ads, Email and Social",
+      "first_pass_supported": 5,
+      "final_supported": 5,
+      "result": "clean",
+      "finding": "OAuth, developer-token review, REST and RPC access, and official MCP claims matched the official documentation sample.",
+      "evidence_url": "https://developers.google.com/google-ads/api/docs/developer-toolkit/mcp-server"
+    },
+    {
+      "id": 41,
+      "app": "Shopify",
+      "category": "Ecommerce",
+      "first_pass_supported": 5,
+      "final_supported": 5,
+      "result": "clean",
+      "finding": "The sampled final claims were directly supported after the retry produced a structurally valid draft.",
+      "evidence_url": "https://shopify.dev/docs/api/app-ui/using-mcp"
+    },
+    {
+      "id": 51,
+      "app": "DataForSEO",
+      "category": "Data, SEO and Scraping",
+      "first_pass_supported": 3,
+      "final_supported": 5,
+      "result": "corrected",
+      "finding": "The draft mistook a curl example for a product CLI and assigned API breadth more confidently than the source allowed.",
+      "evidence_url": "https://docs.dataforseo.com/"
+    },
+    {
+      "id": 61,
+      "app": "GitHub",
+      "category": "Developer, Infra and Data platforms",
+      "first_pass_supported": 4,
+      "final_supported": 5,
+      "result": "corrected",
+      "finding": "OAuth-token evidence was insufficient to classify the sampled authentication path specifically as OAuth 2.0.",
+      "evidence_url": "https://docs.github.com/en/copilot/concepts/context/mcp"
+    },
+    {
+      "id": 71,
+      "app": "Notion",
+      "category": "Productivity and Project Management",
+      "first_pass_supported": 4,
+      "final_supported": 5,
+      "result": "corrected",
+      "finding": "An OAuth-flow reference did not explicitly establish the stricter OAuth 2.0 enum used by the schema.",
+      "evidence_url": "https://developers.notion.com/cli/guides/api-requests"
+    },
+    {
+      "id": 79,
+      "app": "Smartsheet",
+      "category": "Productivity and Project Management",
+      "first_pass_supported": 5,
+      "final_supported": 5,
+      "result": "clean",
+      "finding": "The Business or Enterprise plan restriction and integration claims matched the fetched official evidence.",
+      "evidence_url": "https://developers.smartsheet.com/ai-mcp/smartsheet/mcp-server"
+    },
+    {
+      "id": 90,
+      "app": "PitchBook",
+      "category": "Finance and Fintech",
+      "first_pass_supported": 4,
+      "final_supported": 5,
+      "result": "corrected",
+      "finding": "Variable pricing and contact-sales evidence did not prove the draft's stronger paid-plan classification.",
+      "evidence_url": "https://mcp-proxy-external.pitchbook.com/"
+    },
+    {
+      "id": 91,
+      "app": "NotebookLM",
+      "category": "AI, Research and Media-native",
+      "first_pass_supported": 5,
+      "final_supported": 5,
+      "result": "clean",
+      "finding": "Enterprise setup, licence and Google Cloud role requirements were supported by the official documentation.",
+      "evidence_url": "https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/api-notebooks"
+    },
+    {
+      "id": 98,
+      "app": "Mermaid CLI",
+      "category": "AI, Research and Media-native",
+      "first_pass_supported": 5,
+      "final_supported": 5,
+      "result": "clean",
+      "finding": "The repository established a usable local CLI with no remote credential requirement.",
+      "evidence_url": "https://github.com/mermaid-js/mermaid-cli"
+    }
+  ]
+}
