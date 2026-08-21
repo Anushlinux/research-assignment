@@ -88,10 +88,10 @@ def make_sources() -> dict[str, FetchedSource]:
         (
             "source_5",
             SourceRole.MCP,
-            "https://github.com/github/github-mcp-server",
-            "GitHub MCP Server",
+            "https://docs.github.com/mcp/server",
+            "MCP Server",
             MCP_QUOTE,
-            SourceTier.OFFICIAL_GITHUB,
+            SourceTier.OFFICIAL_DEVELOPER_DOCS,
         ),
     )
     return {

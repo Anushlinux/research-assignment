@@ -7,7 +7,11 @@ from integration_research.models import (
     ProductionGate,
     Ternary,
 )
-from integration_research.validation import quote_exists, validate_draft
+from integration_research.validation import (
+    normalize_unknown_questions,
+    quote_exists,
+    validate_draft,
+)
 from tests.helpers import evidence, make_app_input, make_snippets, make_sources, make_valid_draft
 
 
@@ -92,3 +96,20 @@ def test_explicit_unknowns_are_valid_with_questions() -> None:
     )
     assert report.valid
     assert set(report.unknown_fields) == {"commercial_requirement", "production_gate"}
+
+
+def test_missing_unknown_question_is_normalized_without_changing_the_raw_draft() -> None:
+    draft = make_valid_draft()
+    draft.cli = Claim[Ternary](value=Ternary.UNKNOWN, evidence=[])
+    normalized, issues = normalize_unknown_questions(draft)
+    assert not draft.unresolved_questions
+    assert any("cli" in question.lower() for question in normalized.unresolved_questions)
+    assert [(issue.code, issue.field) for issue in issues] == [("unknown_question_added", "cli")]
+    report = validate_draft(
+        normalized,
+        app_input=make_app_input(),
+        sources=make_sources(),
+        snippets=make_snippets(),
+        normalizations=issues,
+    )
+    assert report.valid

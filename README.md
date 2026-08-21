@@ -4,14 +4,16 @@ This repository is the foundation for an evidence-backed research pipeline that 
 
 ## Current status
 
-Milestone 1.1 implements one synchronous, evidence-backed production path for GitHub (app ID 61).
-It uses field-specific Composio searches, official-source selection, bounded page reduction,
+Milestone 1.2 implements one synchronous, catalog-driven production path for any app in
+`data/apps.csv`. It uses role-specific Composio searches, catalog-derived trusted-source selection,
+per-app artifact isolation, bounded page reduction,
 deterministic exact-text evidence snippets, one tool-free OpenAI extraction call, and one
 independent tool-free semantic evidence-audit call. The extractor selects stored snippet IDs rather
 than generating quotations. Deterministic code admits only supported claims and computes
 buildability.
 
-MCP verification, Browser Tool fallback, concurrency, the five-app pilot, the remaining 99 apps, and the HTML case study are intentionally deferred.
+MCP verification, Browser Tool fallback, concurrency, all-app execution, and the HTML case study are
+intentionally deferred.
 
 ## Requirements
 
@@ -47,25 +49,32 @@ uv run --frozen mypy src tests
 uv run --frozen pytest
 ```
 
-## Run Milestone 1.1
+## Run Milestone 1.2
 
-Put `OPENAI_API_KEY` and `COMPOSIO_API_KEY` in the ignored `.env`, then run only GitHub:
+Put `OPENAI_API_KEY` and `COMPOSIO_API_KEY` in the ignored `.env`, then run one catalog app:
 
 ```bash
-uv run --frozen research run --app-id 61 --run-id github-milestone-1-1
+uv run --frozen research run --app-id 61 --run-id single-app
 ```
 
 The immutable record and its supporting artifacts are written under:
 
 ```text
-runs/github-milestone-1-1/apps/061-github/
+runs/single-app/apps/061-github/
 ```
 
-The command rejects every app ID other than 61. Each immutable attempt preserves the fetched
+Run the five-app pilot sequentially, without concurrency:
+
+```bash
+uv run --frozen research run --ids 61,22,31,90,98 --run-id pilot-milestone-1-2
+```
+
+Every valid catalog ID is supported. Each immutable per-app attempt preserves the fetched
 sources, exact evidence-snippet catalog, raw draft, literal validation, semantic-audit input and
 result, admission diff, admitted draft, final validation, metrics, and final record. Fatal
 structural or provenance failures do not create `final.json`; semantically unsupported claims
-become explicit unknowns instead.
+become explicit unknowns instead. A failed app is recorded and does not stop later IDs in the same
+sequential run. The root `run-summary.json` records all successes and failures.
 
 ## Repository contracts
 
@@ -77,10 +86,8 @@ become explicit unknowns instead.
 - `runs/` is reserved for generated run artifacts and is ignored except for its placeholder.
 - `.state/` will contain reusable local session state and is fully ignored.
 
-## Deferred next milestone
-
-After the GitHub record has been inspected, the next milestone is the five-app pilot for IDs
-`61,22,31,90,98`. Do not run the other apps or add the verifier before that review.
+Do not run the remaining 95 apps or add the verifier before the five pilot records have been
+inspected.
 
 ## Core project rules
 

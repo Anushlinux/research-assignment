@@ -1,8 +1,8 @@
-# GitHub integration research extraction
+# Integration research extraction
 
-Prompt version: `github-extract-v3`
+Prompt version: `catalog-extract-v2`
 
-Extract integration facts from the supplied GitHub sources into the required schema.
+Extract integration facts about the named catalog app from the supplied fetched sources.
 
 ## Evidence boundary
 
@@ -19,10 +19,14 @@ Extract integration facts from the supplied GitHub sources into the required sch
 
 - Use only these high-level methods: `oauth2`, `api_key`, `basic`, `token`, `other`, `none`, and
   `unknown`.
-- Preserve implementation detail, such as “GitHub personal access token” or “GitHub App JWT,” in
+- Preserve implementation detail, such as “personal access token” or “application JWT,” in
   `details`. Do not create a second method for the Authorization transport scheme.
 - OAuth2 requires text explicitly establishing OAuth 2.0 or dedicated OAuth application
   documentation. The words “OAuth token” alone are insufficient.
+- A fully local CLI or library path may use `none` authentication and `not_required` credential
+  access when the source positively documents installation plus a command or function operating on
+  local inputs and outputs without an external account or service. Cite that local invocation. Do
+  not use this rule for a remote-service CLI merely because credentials are omitted from one example.
 
 ## Access and gating
 

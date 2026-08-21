@@ -38,16 +38,20 @@ from integration_research.validation import (
     normalize_evidence_text,
 )
 
-AUDIT_PROMPT_VERSION = "github-evidence-audit-v1"
+AUDIT_PROMPT_VERSION = "catalog-evidence-audit-v2"
 AUDIT_PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "audit.md"
 
 FIELD_DEFINITIONS: dict[str, str] = {
     "description": "A one-line factual description of the named product.",
     "auth_methods": (
         "High-level authentication method. OAuth2 requires explicit OAuth 2.0 evidence or "
-        "dedicated OAuth application documentation. Transport wording is not a second method."
+        "dedicated OAuth application documentation. Transport wording is not a second method. "
+        "A documented fully local command over local files can support none for that path."
     ),
-    "credential_access": "How credentials can be obtained, separate from price and production.",
+    "credential_access": (
+        "How credentials can be obtained, separate from price and production. A documented fully "
+        "local install-and-run path can support not_required for that path."
+    ),
     "commercial_requirement": "The account, trial, paid-plan, or enterprise requirement.",
     "production_gate": (
         "Approval required for production use. None is a positive claim requiring direct evidence."
@@ -67,23 +71,21 @@ FIELD_DEFINITIONS: dict[str, str] = {
 }
 
 UNRESOLVED_QUESTIONS: dict[str, str] = {
-    "description": (
-        "What concise description of GitHub is directly supported by the selected sources?"
-    ),
-    "auth_methods": "Which high-level GitHub authentication methods are directly documented?",
-    "credential_access": "Can a GitHub developer obtain credentials without external approval?",
-    "commercial_requirement": "What commercial plan, if any, is required for GitHub API access?",
-    "production_gate": "Does GitHub require review or approval for the documented production path?",
-    "api_availability": "Does GitHub expose a supported callable developer API?",
-    "api_styles": "Which callable API styles does GitHub directly document?",
-    "webhooks": "Does GitHub directly document webhook or event delivery support?",
-    "official_sdk": "Does GitHub directly document an official SDK for this interface?",
-    "cli": "Does GitHub document a usable CLI with meaningful callable operations?",
-    "api_breadth": "How broad is GitHub's documented callable API surface?",
-    "api_capabilities": "Which read and write capabilities are directly supported by GitHub's API?",
-    "api_surface_summary": "Which GitHub API operations are directly supported by the evidence?",
-    "mcp_status": "Does GitHub currently provide an official or community MCP server?",
-    "blocker": "Is there a documented blocker to building a GitHub integration?",
+    "description": "What concise description of {app_name} is directly supported by the sources?",
+    "auth_methods": "Which high-level {app_name} authentication methods are documented?",
+    "credential_access": "Can a developer obtain {app_name} credentials without external approval?",
+    "commercial_requirement": "What commercial plan is required for {app_name} interface access?",
+    "production_gate": "Does {app_name} require review or approval for production use?",
+    "api_availability": "Does {app_name} expose a supported callable developer API?",
+    "api_styles": "Which callable API styles does {app_name} document?",
+    "webhooks": "Does {app_name} document webhook or event delivery support?",
+    "official_sdk": "Does {app_name} document an official SDK for this interface?",
+    "cli": "Does {app_name} document a usable CLI with meaningful callable operations?",
+    "api_breadth": "How broad is the documented {app_name} callable API surface?",
+    "api_capabilities": "Which read and write capabilities does the {app_name} API support?",
+    "api_surface_summary": "Which {app_name} interface operations are supported by evidence?",
+    "mcp_status": "Was an official or community MCP server found for {app_name}?",
+    "blocker": "Is there a documented blocker to building a {app_name} integration?",
 }
 
 
@@ -180,7 +182,7 @@ def build_audit_input(
                 AuditEvidenceContext(
                     source_id=source.source_id,
                     source_title=source.title,
-                    source_role=source.source_role,
+                    source_roles=source.source_roles or [source.source_role],
                     quote=snippet.text,
                     context=_context_for(snippet.text, source.text),
                 )
@@ -220,7 +222,7 @@ def _oauth_token_can_narrow(claim: AuditClaimInput) -> bool:
 
 
 def _add_question(draft: AppResearchDraft, field: str) -> None:
-    question = UNRESOLVED_QUESTIONS[_root(field)]
+    question = UNRESOLVED_QUESTIONS[_root(field)].format(app_name=draft.app_name)
     if question not in draft.unresolved_questions:
         draft.unresolved_questions.append(question)
 

@@ -55,6 +55,7 @@ def test_oauth_token_partially_supported_claim_narrows_to_token() -> None:
 
 def test_unsupported_commercial_claim_becomes_unknown_not_failure() -> None:
     draft = make_valid_draft()
+    draft.app_name = "Example Product"
     audit_input = build_audit_input(draft, make_sources(), make_snippets())
     response = direct_response([claim.claim_id for claim in audit_input.claims])
     commercial = next(
@@ -68,6 +69,7 @@ def test_unsupported_commercial_claim_becomes_unknown_not_failure() -> None:
     assert admitted.commercial_requirement.value == CommercialRequirement.UNKNOWN
     assert admitted.commercial_requirement.evidence == []
     assert any("commercial" in question.lower() for question in admitted.unresolved_questions)
+    assert any("Example Product" in question for question in admitted.unresolved_questions)
     assert report.changes[0].field == "commercial_requirement"
 
 

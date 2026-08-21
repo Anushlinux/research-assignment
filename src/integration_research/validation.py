@@ -19,6 +19,7 @@ from integration_research.models import (
     FetchedSource,
     McpStatus,
     ProductionGate,
+    SourceTier,
     Ternary,
     ValidationIssue,
     ValidationReport,
@@ -131,6 +132,41 @@ def _question_covers(field: str, questions: list[str]) -> bool:
     root = field.split("[", 1)[0].split(".", 1)[0]
     expected = terms.get(root, (root.replace("_", " "),))
     return any(any(term in question.lower() for term in expected) for question in questions)
+
+
+def normalize_unknown_questions(
+    draft: AppResearchDraft,
+) -> tuple[AppResearchDraft, list[ValidationIssue]]:
+    """Add deterministic review questions for model-returned unknowns.
+
+    The raw draft remains immutable in storage. This normalization only repairs bookkeeping that
+    can be derived from the schema; it never upgrades an unknown value or invents evidence.
+    """
+
+    normalized = draft.model_copy(deep=True)
+    issues: list[ValidationIssue] = []
+    unknown_fields = [
+        claim.field for claim in iter_material_claims(normalized) if is_unknown(claim.value)
+    ]
+    if not normalized.api_styles:
+        unknown_fields.append("api_styles")
+    for field in dict.fromkeys(unknown_fields):
+        if _question_covers(field, normalized.unresolved_questions):
+            continue
+        root = field.split("[", 1)[0].split(".", 1)[0]
+        label = root.replace("_", " ")
+        normalized.unresolved_questions.append(
+            f"What evidence resolves the {label} for {normalized.app_name}?"
+        )
+        issues.append(
+            ValidationIssue(
+                level="normalization",
+                code="unknown_question_added",
+                field=field,
+                message="Added the missing deterministic unresolved question.",
+            )
+        )
+    return normalized, issues
 
 
 def validate_draft(
@@ -260,11 +296,7 @@ def validate_draft(
             source = sources.get(reference.source_id)
             if source is None or not source.successful:
                 continue
-            if source.source_tier.value not in {
-                "official_developer_docs",
-                "official_github",
-                "official_blog",
-            }:
+            if source.source_tier not in set(SourceTier):
                 error("mcp_not_official", "mcp_status", "official MCP lacks official evidence")
 
     return ValidationReport(

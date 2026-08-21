@@ -1,8 +1,11 @@
 from integration_research.models import (
     ApiAvailability,
     ApiBreadth,
+    AuthMethod,
+    AuthMethodDraft,
     Claim,
     CommercialRequirement,
+    CredentialAccess,
     McpStatus,
     ProductionGate,
     Ternary,
@@ -17,7 +20,7 @@ def test_broad_self_serve_api_is_buildable() -> None:
     assert derive_integration_paths(draft) == ["cli", "graphql", "official_mcp", "rest"]
 
 
-def test_paid_or_approval_gates_are_conditional() -> None:
+def test_explicit_approval_gate_is_conditional_but_pricing_is_independent() -> None:
     draft = make_valid_draft()
     draft.production_gate = Claim[ProductionGate](
         value=ProductionGate.APP_REVIEW,
@@ -30,16 +33,16 @@ def test_paid_or_approval_gates_are_conditional() -> None:
         value=CommercialRequirement.PAID_PLAN,
         evidence=evidence("source_3", API_QUOTE),
     )
-    assert compute_buildability(draft).value == "conditional"
+    assert compute_buildability(draft).value == "yes"
 
 
-def test_narrow_or_read_only_api_is_conditional() -> None:
+def test_narrow_or_read_only_api_remains_buildable_when_access_is_usable() -> None:
     draft = make_valid_draft()
     draft.api_breadth.value = ApiBreadth.NARROW
-    assert compute_buildability(draft).value == "conditional"
+    assert compute_buildability(draft).value == "yes"
     draft.api_breadth.value = ApiBreadth.BROAD
     draft.api_capabilities.write.value = Ternary.NO
-    assert compute_buildability(draft).value == "conditional"
+    assert compute_buildability(draft).value == "yes"
 
 
 def test_webhooks_and_sdk_alone_do_not_establish_buildability() -> None:
@@ -54,7 +57,32 @@ def test_webhooks_and_sdk_alone_do_not_establish_buildability() -> None:
     assert derive_integration_paths(draft) == []
 
 
-def test_unknown_material_gating_makes_verdict_unknown() -> None:
+def test_unknown_commercial_or_production_data_does_not_erase_self_serve_path() -> None:
     draft = make_valid_draft()
     draft.commercial_requirement.value = CommercialRequirement.UNKNOWN
+    draft.production_gate.value = ProductionGate.UNKNOWN
+    assert compute_buildability(draft).value == "yes"
+
+
+def test_unknown_credential_path_remains_unknown() -> None:
+    draft = make_valid_draft()
+    draft.credential_access.value = CredentialAccess.UNKNOWN
     assert compute_buildability(draft).value == "unknown"
+
+
+def test_local_cli_with_no_credentials_is_buildable_despite_unknown_gating() -> None:
+    draft = make_valid_draft()
+    draft.api_availability.value = ApiAvailability.UNKNOWN
+    draft.api_styles = []
+    draft.mcp_status.value = McpStatus.UNKNOWN
+    draft.auth_methods = [
+        AuthMethodDraft(
+            method=AuthMethod.NONE,
+            details="Local file conversion requires no service authentication.",
+            evidence=evidence("source_3", API_QUOTE),
+        )
+    ]
+    draft.credential_access.value = CredentialAccess.NOT_REQUIRED
+    draft.commercial_requirement.value = CommercialRequirement.UNKNOWN
+    draft.production_gate.value = ProductionGate.UNKNOWN
+    assert compute_buildability(draft).value == "yes"

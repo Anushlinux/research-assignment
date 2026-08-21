@@ -8,14 +8,13 @@ from integration_research.audit import AUDIT_PROMPT_VERSION
 from integration_research.extraction import PROMPT_VERSION
 from integration_research.models import (
     ApiAvailability,
-    ApiBreadth,
     ApiCapabilitiesFinal,
     AppInput,
     AppResearchDraft,
+    AuthMethod,
     AuthMethodDraft,
     Buildability,
     Claim,
-    CommercialRequirement,
     CredentialAccess,
     EvidenceSnippet,
     FetchedSource,
@@ -34,9 +33,9 @@ def compute_buildability(draft: AppResearchDraft) -> Buildability:
         ApiAvailability.YES,
         ApiAvailability.LIMITED,
     } and bool(draft.api_styles)
-    official_mcp = draft.mcp_status.value == McpStatus.OFFICIAL
+    usable_mcp = draft.mcp_status.value == McpStatus.OFFICIAL
     usable_cli = draft.cli.value == Ternary.YES
-    usable_surface = available_api or official_mcp or usable_cli
+    usable_surface = available_api or usable_mcp or usable_cli
 
     if not usable_surface:
         explicitly_absent = (
@@ -46,26 +45,14 @@ def compute_buildability(draft: AppResearchDraft) -> Buildability:
         )
         return Buildability.NO if explicitly_absent else Buildability.UNKNOWN
 
-    if (
-        draft.credential_access.value == CredentialAccess.UNKNOWN
-        or draft.commercial_requirement.value == CommercialRequirement.UNKNOWN
-        or draft.production_gate.value == ProductionGate.UNKNOWN
-        or (available_api and draft.api_breadth.value == ApiBreadth.UNKNOWN)
-        or (available_api and draft.api_capabilities.read.value == Ternary.UNKNOWN)
-        or (available_api and draft.api_capabilities.write.value == Ternary.UNKNOWN)
-    ):
-        return Buildability.UNKNOWN
+    if draft.credential_access.value == CredentialAccess.NOT_AVAILABLE:
+        return Buildability.NO
 
     conditional_access = {
         CredentialAccess.ADMIN_REQUIRED,
         CredentialAccess.VENDOR_APPROVAL,
         CredentialAccess.PARTNER_ONLY,
         CredentialAccess.CONTACT_SALES,
-    }
-    conditional_commercial = {
-        CommercialRequirement.TRIAL_AVAILABLE,
-        CommercialRequirement.PAID_PLAN,
-        CommercialRequirement.ENTERPRISE_ONLY,
     }
     conditional_gates = {
         ProductionGate.APP_REVIEW,
@@ -75,25 +62,54 @@ def compute_buildability(draft: AppResearchDraft) -> Buildability:
     }
     if (
         draft.credential_access.value in conditional_access
-        or draft.commercial_requirement.value in conditional_commercial
         or draft.production_gate.value in conditional_gates
     ):
         return Buildability.CONDITIONAL
-    if draft.api_availability.value == ApiAvailability.LIMITED:
+    if draft.blocker is not None:
         return Buildability.CONDITIONAL
-    if draft.api_breadth.value == ApiBreadth.NARROW:
-        return Buildability.CONDITIONAL
-    if available_api and draft.api_capabilities.write.value == Ternary.NO:
-        return Buildability.CONDITIONAL
+    usable_access = draft.credential_access.value in {
+        CredentialAccess.SELF_SERVE,
+        CredentialAccess.NOT_REQUIRED,
+    } or any(item.method == AuthMethod.NONE for item in draft.auth_methods)
+    if not usable_access:
+        return Buildability.UNKNOWN
     return Buildability.YES
+
+
+def explain_buildability(draft: AppResearchDraft) -> str:
+    verdict = compute_buildability(draft)
+    paths = derive_integration_paths(draft)
+    if verdict == Buildability.NO:
+        return "Evidence explicitly rules out every API, MCP, and CLI execution path."
+    if verdict == Buildability.UNKNOWN:
+        if not paths:
+            return "No callable API, MCP, or CLI execution path was established."
+        return (
+            "A callable surface exists, but a usable credential or no-auth path was not "
+            "established."
+        )
+    if verdict == Buildability.CONDITIONAL:
+        if draft.blocker is not None:
+            return (
+                "A callable surface exists, but an evidence-backed blocker prevents "
+                "unconditional use."
+            )
+        return (
+            "A callable surface exists, but access requires explicit approval, review, or "
+            "administration."
+        )
+    return (
+        "A callable surface and a self-serve or no-auth execution path are established without "
+        "an explicit blocker."
+    )
 
 
 def derive_integration_paths(draft: AppResearchDraft) -> list[str]:
     paths: set[str] = set()
     if draft.api_availability.value in {ApiAvailability.YES, ApiAvailability.LIMITED}:
         paths.update(claim.value.value for claim in draft.api_styles)
-    if draft.mcp_status.value == McpStatus.OFFICIAL:
-        paths.add("official_mcp")
+    if draft.mcp_status.value in {McpStatus.OFFICIAL, McpStatus.COMMUNITY}:
+        paths.add(f"{draft.mcp_status.value.value}_mcp")
     if draft.cli.value == Ternary.YES:
         paths.add("cli")
     return sorted(paths)
@@ -125,6 +141,7 @@ def resolve_evidence(
         title=source.title,
         source_tier=source.source_tier,
         source_role=source.source_role,
+        source_roles=source.source_roles or [source.source_role],
         quote=snippet.text,
         retrieved_at=source.retrieved_at,
         content_hash=source.content_hash,
@@ -154,13 +171,14 @@ def build_final_record(
     snippets: dict[str, EvidenceSnippet],
     extraction_model: str,
     audit_model: str,
+    official_domains: list[str],
 ) -> FinalAppResearch:
     return FinalAppResearch(
         app_id=draft.app_id,
         app_name=draft.app_name,
         website_hint=app_input.website_hint,
         category=draft.category,
-        official_domains=["docs.github.com", "github.blog", "github.com/github/*"],
+        official_domains=official_domains,
         description=resolve_claim(draft.description, sources, snippets),
         auth_methods=[resolve_auth(item, sources, snippets) for item in draft.auth_methods],
         credential_access=resolve_claim(draft.credential_access, sources, snippets),
@@ -187,7 +205,7 @@ def build_final_record(
         generated_at=datetime.now(UTC),
         extraction_model=extraction_model,
         audit_model=audit_model,
-        pipeline_version="0.1.1-milestone-1.1",
+        pipeline_version="0.1.2-milestone-1.2",
         extraction_prompt_version=PROMPT_VERSION,
         audit_prompt_version=AUDIT_PROMPT_VERSION,
     )

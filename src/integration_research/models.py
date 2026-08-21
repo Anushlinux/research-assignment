@@ -1,4 +1,4 @@
-"""Strict data contracts for the Milestone 1.1 GitHub research path."""
+"""Strict data contracts for the catalog-driven research path."""
 
 from __future__ import annotations
 
@@ -30,6 +30,7 @@ class CredentialAccess(StrEnum):
     VENDOR_APPROVAL = "vendor_approval"
     PARTNER_ONLY = "partner_only"
     CONTACT_SALES = "contact_sales"
+    NOT_AVAILABLE = "not_available"
     NOT_REQUIRED = "not_required"
     UNKNOWN = "unknown"
 
@@ -97,8 +98,11 @@ class Buildability(StrEnum):
 
 class SourceTier(StrEnum):
     OFFICIAL_DEVELOPER_DOCS = "official_developer_docs"
-    OFFICIAL_GITHUB = "official_github"
+    OFFICIAL_REPOSITORY = "official_repository"
+    OFFICIAL_HELP = "official_help"
+    OFFICIAL_PRICING = "official_pricing"
     OFFICIAL_BLOG = "official_blog"
+    OFFICIAL_WEBSITE = "official_website"
 
 
 class SourceRole(StrEnum):
@@ -187,6 +191,7 @@ class ResolvedEvidence(StrictModel):
     title: str
     source_tier: SourceTier
     source_role: SourceRole
+    source_roles: list[SourceRole]
     quote: str
     retrieved_at: datetime
     content_hash: str
@@ -251,6 +256,7 @@ class AppInput(StrictModel):
 class FetchedSource(StrictModel):
     source_id: str
     source_role: SourceRole
+    source_roles: list[SourceRole] = Field(default_factory=list)
     url: str
     title: str
     source_tier: SourceTier
@@ -287,7 +293,7 @@ class ValidationReport(StrictModel):
 class AuditEvidenceContext(StrictModel):
     source_id: str
     source_title: str
-    source_role: SourceRole
+    source_roles: list[SourceRole]
     quote: str
     context: str
 

@@ -1,11 +1,14 @@
-"""Synchronous Milestone 1.1 pipeline for GitHub app ID 61."""
+"""Synchronous, catalog-driven research pipeline."""
 
 from __future__ import annotations
 
 import csv
 import hashlib
+import json
 import time
+from collections.abc import Callable
 from contextlib import suppress
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -35,9 +38,11 @@ from integration_research.extraction import (
 from integration_research.models import (
     AppInput,
     AppResearchDraft,
+    AuditDecision,
     FetchedSource,
     FinalAppResearch,
     RunMetrics,
+    SourceRole,
     ValidationReport,
 )
 from integration_research.reduction import (
@@ -47,16 +52,21 @@ from integration_research.reduction import (
 )
 from integration_research.settings import Settings
 from integration_research.source_selection import (
-    SEARCH_PLANS,
     SearchCandidate,
+    build_search_plans,
     candidates_from_citations,
-    normalize_url,
+    candidates_from_trusted_seeds,
+    derive_trusted_source_policy,
     official_source_tier,
     select_sources,
 )
-from integration_research.storage import RunStorage
-from integration_research.validation import validate_draft
-from integration_research.verdict import build_final_record
+from integration_research.storage import RunStorage, app_artifact_name, write_run_json
+from integration_research.validation import (
+    is_unknown,
+    normalize_unknown_questions,
+    validate_draft,
+)
+from integration_research.verdict import build_final_record, explain_buildability
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 APPS_CSV = PROJECT_ROOT / "data" / "apps.csv"
@@ -75,19 +85,45 @@ class PipelineResult(BaseModel):
     app_dir: Path
 
 
-def load_app(app_id: int) -> AppInput:
-    with APPS_CSV.open(encoding="utf-8", newline="") as handle:
+@dataclass(frozen=True)
+class SequentialRunResult:
+    completed: tuple[PipelineResult, ...]
+    failures: tuple[dict[str, object], ...]
+    summary_path: Path
+    pilot_summary_path: Path
+
+
+def load_app_catalog(path: Path = APPS_CSV) -> dict[int, AppInput]:
+    expected = ["id", "app_name", "website_hint", "category", "notes"]
+    catalog: dict[int, AppInput] = {}
+    with path.open(encoding="utf-8", newline="") as handle:
         rows = csv.DictReader(handle)
-        for row in rows:
-            if int(row["id"]) == app_id:
-                return AppInput(
-                    app_id=app_id,
-                    app_name=row["app_name"],
-                    website_hint=row["website_hint"],
-                    category=row["category"],
-                    notes=row["notes"],
-                )
-    raise ValueError(f"App ID {app_id} does not exist in data/apps.csv")
+        if rows.fieldnames != expected:
+            raise ValueError(f"apps.csv header must be {expected}")
+        for line_number, row in enumerate(rows, start=2):
+            try:
+                app_id = int(row["id"])
+            except (TypeError, ValueError) as error:
+                raise ValueError(f"apps.csv line {line_number} has an invalid id") from error
+            if app_id in catalog:
+                raise ValueError(f"apps.csv contains duplicate app ID {app_id}")
+            if not row["app_name"].strip() or not row["category"].strip():
+                raise ValueError(f"apps.csv line {line_number} requires app_name and category")
+            catalog[app_id] = AppInput(
+                app_id=app_id,
+                app_name=row["app_name"],
+                website_hint=row["website_hint"],
+                category=row["category"],
+                notes=row["notes"],
+            )
+    return catalog
+
+
+def load_app(app_id: int) -> AppInput:
+    try:
+        return load_app_catalog()[app_id]
+    except KeyError as error:
+        raise ValueError(f"App ID {app_id} does not exist in data/apps.csv") from error
 
 
 def _dict_list(value: object) -> list[dict[str, object]]:
@@ -113,16 +149,19 @@ def _failure_payload(stage: str, error: Exception) -> dict[str, object]:
     }
 
 
-def run_github_pipeline(
+def run_app_pipeline(
     *,
     settings: Settings,
     run_id: str,
+    app_id: int,
     research_client: ResearchClient | None = None,
     extraction_client: ExtractionClient | None = None,
     audit_client: AuditClient | None = None,
 ) -> PipelineResult:
-    app_input = load_app(61)
-    storage = RunStorage(runs_dir=settings.runs_dir, run_id=run_id)
+    app_input = load_app(app_id)
+    policy = derive_trusted_source_policy(app_input)
+    search_plans = build_search_plans(app_input, policy)
+    storage = RunStorage(runs_dir=settings.runs_dir, run_id=run_id, app=app_input)
     storage.write_json("input.json", app_input)
     metrics = RunMetrics()
     pipeline_start = time.perf_counter()
@@ -137,11 +176,17 @@ def run_github_pipeline(
 
         stage = "search"
         search_records: list[dict[str, object]] = []
-        all_candidates: list[SearchCandidate] = []
-        if settings.research_max_searches_per_app != len(SEARCH_PLANS):
-            raise ValueError("Milestone 1.1 requires exactly five configured search calls")
+        all_candidates: list[SearchCandidate] = candidates_from_trusted_seeds(
+            app=app_input,
+            policy=policy,
+            plans=search_plans,
+        )
+        if settings.research_max_searches_per_app < len(search_plans):
+            raise ValueError(
+                f"research_max_searches_per_app must allow {len(search_plans)} required roles"
+            )
 
-        for plan in SEARCH_PLANS:
+        for index, plan in enumerate(search_plans, start=1):
             call_start = time.perf_counter()
             metrics.search_calls += 1
             execution = client.execute(SEARCH_TOOL, {"query": plan.query})
@@ -158,29 +203,43 @@ def run_github_pipeline(
                     "raw_response": execution.raw_response,
                 }
             )
+            storage.write_json(f"searches/{index:02d}-{plan.role.value}.json", search_records[-1])
             if execution.error is not None:
                 raise PipelineFailure(f"Composio search failed: {execution.error}")
             citations = _dict_list(execution.data.get("citations"))
             all_candidates.extend(
-                candidates_from_citations(role=plan.role, query=plan.query, citations=citations)
+                candidates_from_citations(
+                    policy=policy,
+                    role=plan.role,
+                    query=plan.query,
+                    citations=citations,
+                )
             )
         storage.write_json("searches.json", search_records)
 
         stage = "source_selection"
         selected = select_sources(all_candidates, maximum=settings.research_max_fetches_per_app)
         if not selected:
-            raise PipelineFailure("No allowed official GitHub source was selected")
-        selected_records = []
-        for index, candidate in enumerate(selected, start=1):
+            raise PipelineFailure("No catalog-trusted source was selected")
+        selected_records: list[dict[str, object]] = []
+        unique_selected: list[SearchCandidate] = []
+        source_id_by_url: dict[str, str] = {}
+        roles_by_url: dict[str, list[SourceRole]] = {}
+        for candidate in selected:
+            if candidate.normalized_url not in source_id_by_url:
+                source_id_by_url[candidate.normalized_url] = f"source_{len(unique_selected) + 1}"
+                unique_selected.append(candidate)
+                roles_by_url[candidate.normalized_url] = []
+            roles_by_url[candidate.normalized_url].append(candidate.role)
             record = candidate.as_dict()
-            record["source_id"] = f"source_{index}"
+            record["source_id"] = source_id_by_url[candidate.normalized_url]
             selected_records.append(record)
         storage.write_json("selected-sources.json", selected_records)
 
         stage = "fetch"
         fetched_sources: list[FetchedSource] = []
-        for index, candidate in enumerate(selected, start=1):
-            source_id = f"source_{index}"
+        for candidate in unique_selected:
+            source_id = source_id_by_url[candidate.normalized_url]
             call_start = time.perf_counter()
             metrics.fetch_calls += 1
             execution = client.execute(
@@ -196,16 +255,17 @@ def run_github_pipeline(
             url = returned_url if isinstance(returned_url, str) else candidate.normalized_url
             title = returned_title if isinstance(returned_title, str) else candidate.title
             text = returned_text if isinstance(returned_text, str) else ""
-            tier = official_source_tier(url)
+            tier = official_source_tier(url, policy)
             successful = (
                 execution.error is None
                 and bool(text.strip())
                 and tier is not None
-                and normalize_url(url) == candidate.normalized_url
+                and policy.trusts_url(url)
             )
             source = FetchedSource(
                 source_id=source_id,
                 source_role=candidate.role,
+                source_roles=roles_by_url[candidate.normalized_url],
                 url=url,
                 title=title,
                 source_tier=tier or candidate.source_tier,
@@ -244,6 +304,9 @@ def run_github_pipeline(
                 f"app_id: {app_input.app_id}",
                 f"app_name: {app_input.app_name}",
                 f"category: {app_input.category}",
+                f"website_hint: {app_input.website_hint}",
+                f"notes: {app_input.notes}",
+                "The website hint and notes are identity context, not fetched evidence.",
                 "",
                 source_package,
             )
@@ -297,13 +360,16 @@ def run_github_pipeline(
             },
         )
 
+        normalized_draft, normalization_issues = normalize_unknown_questions(raw_draft)
+        storage.write_json("normalized-draft.json", normalized_draft)
         sources_by_id = {source.source_id: source for source in fetched_sources}
         stage = "literal_validation"
         literal_validation = validate_draft(
-            raw_draft,
+            normalized_draft,
             app_input=app_input,
             sources=sources_by_id,
             snippets=snippets,
+            normalizations=normalization_issues,
         )
         storage.write_json("literal-validation.json", literal_validation)
         if not literal_validation.valid:
@@ -313,7 +379,7 @@ def run_github_pipeline(
             )
 
         stage = "semantic_audit"
-        audit_input = build_audit_input(raw_draft, sources_by_id, snippets)
+        audit_input = build_audit_input(normalized_draft, sources_by_id, snippets)
         audit_prompt = load_audit_prompt()
         storage.write_json(
             "semantic-audit-input.json",
@@ -349,7 +415,7 @@ def run_github_pipeline(
 
         stage = "admission"
         admitted_draft, admission = apply_semantic_audit(
-            raw_draft,
+            normalized_draft,
             audit_input,
             audit_execution.response,
         )
@@ -362,6 +428,7 @@ def run_github_pipeline(
             app_input=app_input,
             sources=sources_by_id,
             snippets=snippets,
+            normalizations=normalization_issues,
         )
         storage.write_json("final-validation.json", final_validation)
         if not final_validation.valid:
@@ -378,10 +445,49 @@ def run_github_pipeline(
             snippets=snippets,
             extraction_model=extractor.model,
             audit_model=auditor.model,
+            official_domains=list(policy.seed_hosts),
         )
         storage.write_json("final.json", final)
         metrics.total_latency_ms = _elapsed_ms(pipeline_start)
         storage.write_json("metrics.json", metrics)
+        audit_counts = (
+            {
+                decision.value: sum(
+                    result.decision == decision for result in audit_execution.response.results
+                )
+                for decision in AuditDecision
+            }
+            if audit_execution.response.results
+            else {}
+        )
+        storage.write_json(
+            "report.json",
+            {
+                "app_id": app_input.app_id,
+                "app_name": app_input.app_name,
+                "queries": [record["query"] for record in search_records],
+                "selected_sources_by_role": selected_records,
+                "fields_extracted": raw_draft.model_dump(mode="json"),
+                "semantic_audit_counts": audit_counts,
+                "fields_downgraded_to_unknown": [
+                    change.field for change in admission.changes if is_unknown(change.new_value)
+                ],
+                "unknown_fields": final_validation.unknown_fields,
+                "unresolved_questions": admitted_draft.unresolved_questions,
+                "buildability": final.buildability.value,
+                "buildability_explanation": explain_buildability(admitted_draft),
+                "validation_errors": [
+                    issue.model_dump(mode="json") for issue in final_validation.errors
+                ],
+                "validation_warnings": [
+                    issue.model_dump(mode="json") for issue in final_validation.warnings
+                ],
+                "validation_normalizations": [
+                    issue.model_dump(mode="json") for issue in final_validation.normalizations
+                ],
+                "metrics": metrics.model_dump(mode="json"),
+            },
+        )
         return PipelineResult(
             final=final,
             validation=final_validation,
@@ -396,3 +502,156 @@ def run_github_pipeline(
         if isinstance(error, PipelineFailure):
             raise
         raise PipelineFailure(f"{stage} failed: {error}") from error
+
+
+def run_app_sequence(
+    *,
+    settings: Settings,
+    run_id: str,
+    app_ids: list[int],
+    research_client: ResearchClient | None = None,
+    extraction_client: ExtractionClient | None = None,
+    audit_client: AuditClient | None = None,
+    pipeline_runner: Callable[..., PipelineResult] | None = None,
+) -> SequentialRunResult:
+    """Run validated app IDs in order, preserving failures and continuing sequentially."""
+
+    if not app_ids:
+        raise ValueError("At least one app ID is required")
+    if len(app_ids) != len(set(app_ids)):
+        raise ValueError("App IDs must not contain duplicates")
+    catalog = load_app_catalog()
+    missing = [app_id for app_id in app_ids if app_id not in catalog]
+    if missing:
+        joined = ", ".join(str(app_id) for app_id in missing)
+        raise ValueError(f"App IDs do not exist in data/apps.csv: {joined}")
+
+    client = research_client or ComposioResearchClient(settings)
+    extractor = extraction_client or OpenAIExtractionClient(settings)
+    auditor = audit_client or OpenAIAuditClient(settings)
+    selected_runner = pipeline_runner or run_app_pipeline
+    completed: list[PipelineResult] = []
+    failures: list[dict[str, object]] = []
+
+    for app_id in app_ids:
+        app_input = catalog[app_id]
+        try:
+            completed.append(
+                selected_runner(
+                    settings=settings,
+                    run_id=run_id,
+                    app_id=app_id,
+                    research_client=client,
+                    extraction_client=extractor,
+                    audit_client=auditor,
+                )
+            )
+        except Exception as error:
+            failures.append(
+                {
+                    "app_id": app_id,
+                    "app_name": app_input.app_name,
+                    "artifact_path": str(
+                        (
+                            settings.runs_dir / run_id / "apps" / app_artifact_name(app_input)
+                        ).resolve()
+                    ),
+                    "error_type": type(error).__name__,
+                    "message": str(error),
+                }
+            )
+
+    summary = {
+        "run_id": run_id,
+        "requested_ids": app_ids,
+        "completed": [
+            {
+                "app_id": result.final.app_id,
+                "app_name": result.final.app_name,
+                "artifact_path": str(result.app_dir),
+                "buildability": result.final.buildability.value,
+            }
+            for result in completed
+        ],
+        "failed": failures,
+        "pilot_summary_path": str((settings.runs_dir / run_id / "pilot-summary.json").resolve()),
+    }
+    summary_path = write_run_json(
+        runs_dir=settings.runs_dir,
+        run_id=run_id,
+        relative_path="run-summary.json",
+        value=summary,
+    ).resolve()
+    app_reports = [
+        json.loads((result.app_dir / "report.json").read_text(encoding="utf-8"))
+        for result in completed
+        if (result.app_dir / "report.json").exists()
+    ]
+    failure_details: list[dict[str, object]] = []
+    for failure in failures:
+        failure_path = Path(str(failure["artifact_path"])) / "failure.json"
+        detail = dict(failure)
+        if failure_path.exists():
+            stored = json.loads(failure_path.read_text(encoding="utf-8"))
+            if isinstance(stored, dict):
+                detail.update(stored)
+        failure_details.append(detail)
+
+    def failed_at(*stages: str) -> list[int]:
+        return [
+            cast(int, failure["app_id"])
+            for failure in failure_details
+            if failure.get("stage") in stages
+        ]
+
+    deeper_research = [
+        cast(int, report["app_id"]) for report in app_reports if report.get("unresolved_questions")
+    ]
+    verifier_candidates = [
+        cast(int, report["app_id"])
+        for report in app_reports
+        if report.get("unresolved_questions")
+        or any(
+            cast(dict[str, int], report.get("semantic_audit_counts", {})).get(decision, 0)
+            for decision in ("partial_support", "unsupported")
+        )
+    ]
+    browser_candidates = set(failed_at("fetch", "reduction"))
+    for report in app_reports:
+        selected_roles = {
+            source.get("source_role")
+            for source in cast(list[dict[str, object]], report.get("selected_sources_by_role", []))
+        }
+        unknown_fields = cast(list[str], report.get("unknown_fields", []))
+        if len(unknown_fields) >= 8 and not {
+            "authentication",
+            "credential_access",
+        }.intersection(selected_roles):
+            browser_candidates.add(cast(int, report["app_id"]))
+    pilot_summary_path = write_run_json(
+        runs_dir=settings.runs_dir,
+        run_id=run_id,
+        relative_path="pilot-summary.json",
+        value={
+            "run_id": run_id,
+            "requested_ids": app_ids,
+            "apps": app_reports,
+            "schema_failures": failed_at(
+                "extraction", "literal_validation", "final_validation", "finalization"
+            ),
+            "discovery_or_source_selection_failures": failed_at(
+                "search", "source_selection", "fetch", "reduction"
+            ),
+            "semantic_audit_failures": failed_at("semantic_audit", "admission"),
+            "requires_deeper_research": deeper_research,
+            "mcp_verifier_candidates": verifier_candidates,
+            "browser_tool_candidates": sorted(browser_candidates),
+            "failures": failure_details,
+        },
+    ).resolve()
+    return SequentialRunResult(
+        completed=tuple(completed),
+        failures=tuple(failures),
+        summary_path=summary_path,
+        pilot_summary_path=pilot_summary_path,
+    )

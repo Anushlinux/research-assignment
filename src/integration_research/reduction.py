@@ -140,12 +140,16 @@ def build_source_package(sources: list[FetchedSource], snippets: dict[str, Evide
             f"SNIPPET {snippet.snippet_id}: {snippet.text}" for snippet in source_snippets
         )
         sections.append(
+            # A fetched page may be the independently selected source for several evidence roles.
             "\n".join(
                 (
                     f"SOURCE {source.source_id}",
                     f"URL: {source.url}",
                     f"TITLE: {source.title}",
-                    f"ROLE: {source.source_role.value}",
+                    "ROLES: "
+                    + ", ".join(
+                        role.value for role in (source.source_roles or [source.source_role])
+                    ),
                     "",
                     snippet_text,
                 )
