@@ -4,7 +4,12 @@ This repository is the foundation for an evidence-backed research pipeline that 
 
 ## Current status
 
-Milestone 1 implements one synchronous, evidence-backed production path for GitHub (app ID 61). It uses deterministic Composio searches, official-source selection, bounded source reduction, one tool-free OpenAI structured extraction, deterministic evidence validation, and a rule-computed buildability verdict.
+Milestone 1.1 implements one synchronous, evidence-backed production path for GitHub (app ID 61).
+It uses field-specific Composio searches, official-source selection, bounded page reduction,
+deterministic exact-text evidence snippets, one tool-free OpenAI extraction call, and one
+independent tool-free semantic evidence-audit call. The extractor selects stored snippet IDs rather
+than generating quotations. Deterministic code admits only supported claims and computes
+buildability.
 
 MCP verification, Browser Tool fallback, concurrency, the five-app pilot, the remaining 99 apps, and the HTML case study are intentionally deferred.
 
@@ -42,22 +47,25 @@ uv run --frozen mypy src tests
 uv run --frozen pytest
 ```
 
-## Run Milestone 1
+## Run Milestone 1.1
 
 Put `OPENAI_API_KEY` and `COMPOSIO_API_KEY` in the ignored `.env`, then run only GitHub:
 
 ```bash
-uv run --frozen research run --app-id 61 --run-id github-milestone-1
+uv run --frozen research run --app-id 61 --run-id github-milestone-1-1
 ```
 
 The immutable record and its supporting artifacts are written under:
 
 ```text
-runs/github-milestone-1/apps/061-github/
+runs/github-milestone-1-1/apps/061-github/
 ```
 
-The command rejects every app ID other than 61. A validation failure preserves the draft,
-validation report, metrics, and failure details but does not create `final.json`.
+The command rejects every app ID other than 61. Each immutable attempt preserves the fetched
+sources, exact evidence-snippet catalog, raw draft, literal validation, semantic-audit input and
+result, admission diff, admitted draft, final validation, metrics, and final record. Fatal
+structural or provenance failures do not create `final.json`; semantically unsupported claims
+become explicit unknowns instead.
 
 ## Repository contracts
 
@@ -78,6 +86,7 @@ After the GitHub record has been inspected, the next milestone is the five-app p
 
 - Search and page retrieval will happen through Composio.
 - OpenAI will interpret fetched sources but will not act as the research search provider.
+- A separate OpenAI call audits claim-to-evidence support without tools or browsing.
 - Unsupported or conflicting claims remain `unknown`.
 - Drafts and corrections remain separate and auditable.
 - The five-app pilot must be inspected before any 100-app run.

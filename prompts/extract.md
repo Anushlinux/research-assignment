@@ -1,35 +1,48 @@
 # GitHub integration research extraction
 
-Prompt version: `github-extract-v1`
+Prompt version: `github-extract-v3`
 
-You extract integration facts from the supplied GitHub sources into the required schema.
+Extract integration facts from the supplied GitHub sources into the required schema.
 
 ## Evidence boundary
 
-- Use only the supplied source content. Do not use prior knowledge.
-- Do not browse and do not ask for tools.
-- Never return a URL. Cite only a supplied `source_id` and a short verbatim quote.
-- Every known material claim needs at least one evidence reference.
-- A quote must appear exactly in the supplied source after ordinary whitespace is normalized.
-- Return `unknown` when the supplied sources do not establish a value.
-- Add a specific unresolved question for each material unknown.
+- Use only supplied source content. Do not use prior knowledge, browse, or ask for tools.
+- Cite evidence only with a supplied `source_id` and `snippet_id`; never return a URL or write your
+  own quotation. A snippet ID resolves deterministically to exact stored source text.
+- Every evidence reference must pair a snippet with its own source. Do not invent snippet IDs.
+- Every known material claim needs evidence whose quotation appears in its source.
+- Return the appropriate enum `unknown`, nullable text value, or empty API-style list when the
+  sources do not establish a claim. Add a specific unresolved question for every material unknown.
 - Do not decide buildability or integration paths.
 
-## Field rules
+## Authentication
 
-- Keep `app_id`, `app_name`, and `category` exactly as supplied.
-- The description must be one factual line supported by evidence.
-- Multiple authentication methods may coexist. Distinguish OAuth, personal access tokens,
-  bearer tokens, Basic authentication, GitHub App tokens, and other documented methods.
-- Developer access means whether a developer can obtain credentials. Production gates are a
-  separate question. Use a single `none` production-gate claim when no gate is established.
-- API breadth is `broad` when most important resources have meaningful read/write coverage,
-  `moderate` for useful but incomplete coverage, `narrow` for one constrained workflow,
-  `none` only with explicit negative evidence, and otherwise `unknown`.
-- API capabilities separately record read, write, and webhook/event support as yes/no/unknown.
-- `not_found` for MCP is only a bounded search result, never proof of universal non-existence.
-  Prefer `unknown` when no fetched official source establishes MCP status.
-- Do not infer `no`, `not_available`, or another negative value from a failed search or silence.
-- `blocker` is null when there is no evidenced blocker.
+- Use only these high-level methods: `oauth2`, `api_key`, `basic`, `token`, `other`, `none`, and
+  `unknown`.
+- Preserve implementation detail, such as “GitHub personal access token” or “GitHub App JWT,” in
+  `details`. Do not create a second method for the Authorization transport scheme.
+- OAuth2 requires text explicitly establishing OAuth 2.0 or dedicated OAuth application
+  documentation. The words “OAuth token” alone are insufficient.
 
-Return only the structured response required by the supplied schema.
+## Access and gating
+
+- `credential_access` describes how credentials are obtained.
+- `commercial_requirement` separately describes whether free, trial, paid, or enterprise access is
+  required. Credential creation alone does not prove `free_available`.
+- `production_gate` separately describes approval. `none` is a positive claim and requires direct
+  evidence that no review or approval is required. Silence means `unknown`.
+
+## Interfaces
+
+- `api_styles` may contain only REST, GraphQL, RPC, or another callable API style.
+- Webhooks are an event interface, SDKs are client libraries, and a CLI is a local execution path.
+  Record them only in `webhooks`, `official_sdk`, and `cli`; never put them in `api_styles`.
+- Mark `cli = yes` only when the source documents a usable command-line operation, not merely a CLI
+  installation reference.
+- API breadth is broad only when evidence establishes coverage across most important resources,
+  moderate for useful but incomplete coverage, narrow for one constrained workflow, none only with
+  explicit negative evidence, and otherwise unknown.
+- `not_found` for MCP is a bounded search result, never universal proof of non-existence.
+- Do not infer any `no`, `none`, or `not_found` value from silence or failed search.
+
+Keep `app_id`, `app_name`, and `category` exactly as supplied. Return only the structured response.

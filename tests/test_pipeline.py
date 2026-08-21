@@ -4,9 +4,18 @@ from pathlib import Path
 
 import pytest
 
+from integration_research.audit import AuditExecution
 from integration_research.composio_session import FETCH_TOOL, SEARCH_TOOL, ToolExecution
 from integration_research.extraction import ExtractionResult
-from integration_research.models import AppResearchDraft, EvidenceRef
+from integration_research.models import (
+    AppResearchDraft,
+    AuditDecision,
+    ClaimAuditResult,
+    CommercialRequirement,
+    EvidenceRef,
+    SemanticAuditInput,
+    SemanticAuditResponse,
+)
 from integration_research.pipeline import PipelineFailure, run_github_pipeline
 from integration_research.settings import Settings
 from integration_research.source_selection import SEARCH_PLANS
@@ -64,8 +73,9 @@ class FakeExtractionClient:
 
     def extract(self, *, instructions: str, source_input: str) -> ExtractionResult:
         self.calls += 1
-        assert "Use only the supplied source content" in instructions
+        assert "Use only supplied source content" in instructions
         assert "SOURCE source_1" in source_input
+        assert "ROLE: authentication" in source_input
         return ExtractionResult(
             draft=self.draft,
             response_id="response-test",
@@ -74,54 +84,133 @@ class FakeExtractionClient:
         )
 
 
+class FakeAuditClient:
+    model = "fake-audit-model"
+
+    def __init__(self, *, unsupported_field: str | None = None, incomplete: bool = False) -> None:
+        self.unsupported_field = unsupported_field
+        self.incomplete = incomplete
+        self.calls = 0
+
+    def audit(self, *, instructions: str, audit_input: SemanticAuditInput) -> AuditExecution:
+        self.calls += 1
+        assert "Do not browse" in instructions
+        results = []
+        for claim in audit_input.claims:
+            decision = (
+                AuditDecision.UNSUPPORTED
+                if claim.field == self.unsupported_field
+                else AuditDecision.DIRECT_SUPPORT
+            )
+            results.append(
+                ClaimAuditResult(
+                    claim_id=claim.claim_id,
+                    decision=decision,
+                    reason="The supplied evidence was evaluated independently.",
+                )
+            )
+        if self.incomplete:
+            results.pop()
+        return AuditExecution(
+            response=SemanticAuditResponse(results=results),
+            response_id="audit-response-test",
+            input_tokens=67,
+            output_tokens=23,
+        )
+
+
 def make_settings(tmp_path: Path) -> Settings:
     return Settings(
         runs_dir=tmp_path / "runs",
         state_dir=tmp_path / ".state",
+        research_max_searches_per_app=5,
+        research_max_fetches_per_app=5,
     )
 
 
-def test_pipeline_uses_only_allowed_calls_and_separates_artifacts(tmp_path: Path) -> None:
+def test_pipeline_uses_bounded_calls_and_separates_audit_artifacts(tmp_path: Path) -> None:
     research = FakeResearchClient()
     extraction = FakeExtractionClient(make_valid_draft())
+    audit = FakeAuditClient()
     result = run_github_pipeline(
         settings=make_settings(tmp_path),
         run_id="offline-success",
         research_client=research,
         extraction_client=extraction,
+        audit_client=audit,
     )
 
-    assert [tool for tool, _arguments in research.calls].count(SEARCH_TOOL) == 4
-    assert [tool for tool, _arguments in research.calls].count(FETCH_TOOL) == 4
+    assert [tool for tool, _arguments in research.calls].count(SEARCH_TOOL) == 5
+    assert [tool for tool, _arguments in research.calls].count(FETCH_TOOL) == 5
     assert extraction.calls == 1
+    assert audit.calls == 1
     assert result.final.buildability.value == "yes"
     assert result.metrics.browser_calls == 0
-    assert result.metrics.input_tokens == 123
-    assert (result.app_dir / "draft.json").exists()
-    assert (result.app_dir / "validation.json").exists()
+    assert result.metrics.openai_calls == 2
+    assert result.metrics.input_tokens == 190
+    for artifact in (
+        "draft.json",
+        "evidence-snippets.json",
+        "literal-validation.json",
+        "semantic-audit-input.json",
+        "semantic-audit.json",
+        "admission-diff.json",
+        "admitted-draft.json",
+        "final-validation.json",
+        "final.json",
+    ):
+        assert (result.app_dir / artifact).exists()
+    assert len(list((result.app_dir / "sources").glob("source_*.json"))) == 5
+
+
+def test_unsupported_claim_is_downgraded_and_final_is_written(tmp_path: Path) -> None:
+    result = run_github_pipeline(
+        settings=make_settings(tmp_path),
+        run_id="offline-downgrade",
+        research_client=FakeResearchClient(),
+        extraction_client=FakeExtractionClient(make_valid_draft()),
+        audit_client=FakeAuditClient(unsupported_field="commercial_requirement"),
+    )
+    assert result.final.commercial_requirement.value == CommercialRequirement.UNKNOWN
+    assert result.final.buildability.value == "unknown"
+    assert "commercial_requirement" in result.validation.unknown_fields
     assert (result.app_dir / "final.json").exists()
-    assert len(list((result.app_dir / "sources").glob("source_*.json"))) == 4
 
 
-def test_pipeline_preserves_failure_and_writes_no_final(tmp_path: Path) -> None:
+def test_literal_failure_is_fatal_and_writes_no_final(tmp_path: Path) -> None:
     bad_draft = make_valid_draft()
     bad_draft.description.evidence = [
-        EvidenceRef(source_id="source_1", quote="fabricated quotation")
+        EvidenceRef(source_id="source_1", snippet_id="source_1_snippet_999")
     ]
-    research = FakeResearchClient()
-    extraction = FakeExtractionClient(bad_draft)
-    with pytest.raises(PipelineFailure, match="deterministic validation"):
+    audit = FakeAuditClient()
+    with pytest.raises(PipelineFailure, match="fatal literal validation"):
         run_github_pipeline(
             settings=make_settings(tmp_path),
             run_id="offline-failure",
-            research_client=research,
-            extraction_client=extraction,
+            research_client=FakeResearchClient(),
+            extraction_client=FakeExtractionClient(bad_draft),
+            audit_client=audit,
         )
 
     app_dir = tmp_path / "runs" / "offline-failure" / "apps" / "061-github"
     assert (app_dir / "draft.json").exists()
-    assert (app_dir / "validation.json").exists()
-    assert (app_dir / "metrics.json").exists()
+    assert (app_dir / "literal-validation.json").exists()
     assert (app_dir / "failure.json").exists()
     assert not (app_dir / "final.json").exists()
-    assert extraction.calls == 1
+    assert audit.calls == 0
+
+
+def test_incomplete_audit_is_fatal_and_preserved(tmp_path: Path) -> None:
+    with pytest.raises(PipelineFailure, match="semantic audit is incomplete"):
+        run_github_pipeline(
+            settings=make_settings(tmp_path),
+            run_id="offline-incomplete-audit",
+            research_client=FakeResearchClient(),
+            extraction_client=FakeExtractionClient(make_valid_draft()),
+            audit_client=FakeAuditClient(incomplete=True),
+        )
+    app_dir = tmp_path / "runs" / "offline-incomplete-audit" / "apps" / "061-github"
+    assert (app_dir / "semantic-audit.json").exists()
+    assert (app_dir / "failure.json").exists()
+    assert not (app_dir / "admitted-draft.json").exists()
+    assert not (app_dir / "final.json").exists()

@@ -1,83 +1,94 @@
 from integration_research.models import (
     ApiAvailability,
     ApiBreadth,
-    ApiCapabilitiesDraft,
     Claim,
-    DeveloperAccess,
+    CommercialRequirement,
     EvidenceRef,
-    McpStatus,
+    ProductionGate,
     Ternary,
 )
-from integration_research.validation import (
-    normalize_unsupported_negatives,
-    quote_exists,
-    validate_draft,
-)
-from tests.helpers import make_app_input, make_sources, make_valid_draft
+from integration_research.validation import quote_exists, validate_draft
+from tests.helpers import evidence, make_app_input, make_snippets, make_sources, make_valid_draft
 
 
 def test_quote_validation_normalizes_unicode_and_whitespace() -> None:
     assert quote_exists("OAuth\u00a0token", "Use an OAuth   token for requests.")
+    assert quote_exists(
+        "Use a [personal access token] for requests.",
+        "Use a [personal access token](https://example.test/token) for requests.",
+    )
+    assert quote_exists("Click Generate token.", "Click **Generate token**.")
     assert not quote_exists("invented evidence", "Use an OAuth token for requests.")
 
 
-def test_validation_rejects_unknown_source_and_fabricated_quote() -> None:
+def test_validation_rejects_unknown_snippet() -> None:
     draft = make_valid_draft()
     draft.description.evidence = [
-        EvidenceRef(source_id="source_4", quote="This quotation was invented.")
+        EvidenceRef(source_id="source_5", snippet_id="source_5_snippet_999")
     ]
-    report = validate_draft(draft, app_input=make_app_input(), sources=make_sources())
+    report = validate_draft(
+        draft,
+        app_input=make_app_input(),
+        sources=make_sources(),
+        snippets=make_snippets(),
+    )
     assert not report.valid
-    assert {issue.code for issue in report.errors} == {"quote_not_found"}
+    assert {issue.code for issue in report.errors} == {"unknown_snippet"}
 
 
-def test_unproven_negative_claims_become_unknown() -> None:
+def test_production_none_and_free_access_require_literal_evidence() -> None:
+    draft = make_valid_draft()
+    draft.production_gate = Claim[ProductionGate](value=ProductionGate.NONE, evidence=[])
+    draft.commercial_requirement = Claim[CommercialRequirement](
+        value=CommercialRequirement.FREE_AVAILABLE, evidence=[]
+    )
+    report = validate_draft(
+        draft,
+        app_input=make_app_input(),
+        sources=make_sources(),
+        snippets=make_snippets(),
+    )
+    assert not report.valid
+    missing_fields = {issue.field for issue in report.errors if issue.code == "missing_evidence"}
+    assert missing_fields == {"commercial_requirement", "production_gate"}
+
+
+def test_structural_validation_rejects_api_contradictions() -> None:
     draft = make_valid_draft()
     draft.api_availability = Claim[ApiAvailability](
         value=ApiAvailability.NO,
-        evidence=[EvidenceRef(source_id="source_3", quote="repository read and write operations")],
-    )
-    draft.developer_access = Claim[DeveloperAccess](
-        value=DeveloperAccess.NOT_AVAILABLE,
-        evidence=[EvidenceRef(source_id="source_2", quote="create credentials")],
-    )
-    draft.mcp_status = Claim[McpStatus](value=McpStatus.NOT_FOUND, evidence=[])
-    normalized, changes = normalize_unsupported_negatives(draft, make_sources())
-    assert normalized.api_availability.value == ApiAvailability.UNKNOWN
-    assert normalized.developer_access.value == DeveloperAccess.UNKNOWN
-    assert normalized.mcp_status.value == McpStatus.UNKNOWN
-    assert {change.code for change in changes} == {
-        "negative_api_normalized",
-        "negative_access_normalized",
-        "negative_mcp_normalized",
-    }
-
-
-def test_semantic_validation_rejects_api_contradictions() -> None:
-    draft = make_valid_draft()
-    draft.api_availability = Claim[ApiAvailability](
-        value=ApiAvailability.NO,
-        evidence=[
-            EvidenceRef(
-                source_id="source_3",
-                quote="does not support a public API",
-            )
-        ],
+        evidence=evidence("source_3", "ignored"),
     )
     sources = make_sources()
-    sources["source_3"].text += " GitHub does not support a public API."
     draft.api_breadth = Claim[ApiBreadth](value=ApiBreadth.BROAD, evidence=[])
-    draft.api_capabilities = ApiCapabilitiesDraft(
-        read=Claim[Ternary](value=Ternary.YES, evidence=[]),
-        write=Claim[Ternary](value=Ternary.YES, evidence=[]),
-        webhooks_or_events=Claim[Ternary](value=Ternary.YES, evidence=[]),
-    )
-    normalized, changes = normalize_unsupported_negatives(draft, sources)
+    draft.api_capabilities.read = Claim[Ternary](value=Ternary.YES, evidence=[])
     report = validate_draft(
-        normalized,
+        draft,
         app_input=make_app_input(),
         sources=sources,
-        normalizations=changes,
+        snippets=make_snippets(),
     )
     assert not report.valid
     assert "api_contradiction" in {issue.code for issue in report.errors}
+
+
+def test_explicit_unknowns_are_valid_with_questions() -> None:
+    draft = make_valid_draft()
+    draft.commercial_requirement = Claim[CommercialRequirement](
+        value=CommercialRequirement.UNKNOWN, evidence=[]
+    )
+    draft.production_gate = Claim[ProductionGate](value=ProductionGate.UNKNOWN, evidence=[])
+    draft.unresolved_questions.extend(
+        [
+            "What commercial plan is required for GitHub API access?",
+            "Does GitHub require production approval or review?",
+        ]
+    )
+    report = validate_draft(
+        draft,
+        app_input=make_app_input(),
+        sources=make_sources(),
+        snippets=make_snippets(),
+    )
+    assert report.valid
+    assert set(report.unknown_fields) == {"commercial_requirement", "production_gate"}

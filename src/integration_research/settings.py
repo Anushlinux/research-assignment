@@ -12,10 +12,11 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     composio_api_key: SecretStr | None = None
     openai_model_extract: str = "gpt-5.6-luna"
+    openai_model_verify: str = "gpt-5.6-terra"
     composio_user_id: str = "composio-takehome-research"
     composio_session_id: str = ""
-    research_max_searches_per_app: int = 4
-    research_max_fetches_per_app: int = 4
+    research_max_searches_per_app: int = 5
+    research_max_fetches_per_app: int = 5
     research_max_chars_per_page: int = 20_000
     research_max_chars_per_app: int = 60_000
     runs_dir: Path = Path("runs")

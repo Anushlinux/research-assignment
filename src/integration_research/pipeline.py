@@ -1,4 +1,4 @@
-"""Synchronous Milestone 1 pipeline for GitHub app ID 61."""
+"""Synchronous Milestone 1.1 pipeline for GitHub app ID 61."""
 
 from __future__ import annotations
 
@@ -12,6 +12,14 @@ from typing import cast
 
 from pydantic import BaseModel, ConfigDict
 
+from integration_research.audit import (
+    AUDIT_PROMPT_VERSION,
+    AuditClient,
+    OpenAIAuditClient,
+    apply_semantic_audit,
+    build_audit_input,
+    load_audit_prompt,
+)
 from integration_research.composio_session import (
     FETCH_TOOL,
     SEARCH_TOOL,
@@ -32,7 +40,11 @@ from integration_research.models import (
     RunMetrics,
     ValidationReport,
 )
-from integration_research.reduction import build_source_package, reduce_sources
+from integration_research.reduction import (
+    build_evidence_snippets,
+    build_source_package,
+    reduce_sources,
+)
 from integration_research.settings import Settings
 from integration_research.source_selection import (
     SEARCH_PLANS,
@@ -43,7 +55,7 @@ from integration_research.source_selection import (
     select_sources,
 )
 from integration_research.storage import RunStorage
-from integration_research.validation import normalize_unsupported_negatives, validate_draft
+from integration_research.validation import validate_draft
 from integration_research.verdict import build_final_record
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -107,6 +119,7 @@ def run_github_pipeline(
     run_id: str,
     research_client: ResearchClient | None = None,
     extraction_client: ExtractionClient | None = None,
+    audit_client: AuditClient | None = None,
 ) -> PipelineResult:
     app_input = load_app(61)
     storage = RunStorage(runs_dir=settings.runs_dir, run_id=run_id)
@@ -118,12 +131,15 @@ def run_github_pipeline(
     try:
         client = research_client or ComposioResearchClient(settings)
         extractor = extraction_client or OpenAIExtractionClient(settings)
+        auditor = audit_client or OpenAIAuditClient(settings)
+        metrics.extraction_model = extractor.model
+        metrics.audit_model = auditor.model
 
         stage = "search"
         search_records: list[dict[str, object]] = []
         all_candidates: list[SearchCandidate] = []
         if settings.research_max_searches_per_app != len(SEARCH_PLANS):
-            raise ValueError("Milestone 1 requires exactly four configured search calls")
+            raise ValueError("Milestone 1.1 requires exactly five configured search calls")
 
         for plan in SEARCH_PLANS:
             call_start = time.perf_counter()
@@ -133,7 +149,7 @@ def run_github_pipeline(
             metrics.search_latency_ms += latency
             search_records.append(
                 {
-                    "intent": plan.intent.value,
+                    "source_role": plan.role.value,
                     "query": plan.query,
                     "arguments": {"query": plan.query},
                     "latency_ms": latency,
@@ -146,7 +162,7 @@ def run_github_pipeline(
                 raise PipelineFailure(f"Composio search failed: {execution.error}")
             citations = _dict_list(execution.data.get("citations"))
             all_candidates.extend(
-                candidates_from_citations(intent=plan.intent, query=plan.query, citations=citations)
+                candidates_from_citations(role=plan.role, query=plan.query, citations=citations)
             )
         storage.write_json("searches.json", search_records)
 
@@ -189,6 +205,7 @@ def run_github_pipeline(
             )
             source = FetchedSource(
                 source_id=source_id,
+                source_role=candidate.role,
                 url=url,
                 title=title,
                 source_tier=tier or candidate.source_tier,
@@ -212,8 +229,15 @@ def run_github_pipeline(
             per_page_limit=settings.research_max_chars_per_page,
             per_app_limit=settings.research_max_chars_per_app,
         )
-        source_package = build_source_package(fetched_sources, reduced)
-        prompt = load_extraction_prompt()
+        snippets = build_evidence_snippets(fetched_sources, reduced)
+        if not snippets:
+            raise PipelineFailure("Source reduction produced no referenceable evidence snippets")
+        storage.write_json(
+            "evidence-snippets.json",
+            [snippet.model_dump(mode="json") for snippet in snippets.values()],
+        )
+        source_package = build_source_package(fetched_sources, snippets)
+        extraction_prompt = load_extraction_prompt()
         source_input = "\n".join(
             (
                 "APP",
@@ -228,17 +252,21 @@ def run_github_pipeline(
             "extraction-input.json",
             {
                 "prompt_version": PROMPT_VERSION,
-                "prompt_sha256": _sha256(prompt),
+                "prompt_sha256": _sha256(extraction_prompt),
                 "model": extractor.model,
-                "instructions": prompt,
+                "instructions": extraction_prompt,
                 "source_input": source_input,
                 "sources": [
                     {
                         "source_id": source.source_id,
+                        "source_role": source.source_role.value,
                         "url": source.url,
                         "title": source.title,
                         "content_hash": source.content_hash,
                         "reduced_characters": len(reduced[source.source_id]),
+                        "evidence_snippets": sum(
+                            snippet.source_id == source.source_id for snippet in snippets.values()
+                        ),
                     }
                     for source in fetched_sources
                 ],
@@ -248,10 +276,15 @@ def run_github_pipeline(
         stage = "extraction"
         call_start = time.perf_counter()
         metrics.openai_calls += 1
-        extraction = extractor.extract(instructions=prompt, source_input=source_input)
-        metrics.openai_latency_ms += _elapsed_ms(call_start)
-        metrics.input_tokens = extraction.input_tokens
-        metrics.output_tokens = extraction.output_tokens
+        metrics.extraction_calls += 1
+        extraction = extractor.extract(instructions=extraction_prompt, source_input=source_input)
+        extraction_latency = _elapsed_ms(call_start)
+        metrics.openai_latency_ms += extraction_latency
+        metrics.extraction_latency_ms += extraction_latency
+        metrics.extraction_input_tokens = extraction.input_tokens
+        metrics.extraction_output_tokens = extraction.output_tokens
+        metrics.input_tokens += extraction.input_tokens
+        metrics.output_tokens += extraction.output_tokens
         raw_draft: AppResearchDraft = extraction.draft
         storage.write_json("draft.json", raw_draft)
         storage.write_json(
@@ -264,34 +297,94 @@ def run_github_pipeline(
             },
         )
 
-        stage = "validation"
         sources_by_id = {source.source_id: source for source in fetched_sources}
-        normalized_draft, normalizations = normalize_unsupported_negatives(raw_draft, sources_by_id)
-        validation = validate_draft(
-            normalized_draft,
+        stage = "literal_validation"
+        literal_validation = validate_draft(
+            raw_draft,
             app_input=app_input,
             sources=sources_by_id,
-            normalizations=normalizations,
+            snippets=snippets,
         )
-        storage.write_json("validation.json", validation)
-        if not validation.valid:
+        storage.write_json("literal-validation.json", literal_validation)
+        if not literal_validation.valid:
             raise PipelineFailure(
-                f"Draft failed deterministic validation with {len(validation.errors)} error(s)"
+                "Draft failed fatal literal validation with "
+                f"{len(literal_validation.errors)} error(s)"
+            )
+
+        stage = "semantic_audit"
+        audit_input = build_audit_input(raw_draft, sources_by_id, snippets)
+        audit_prompt = load_audit_prompt()
+        storage.write_json(
+            "semantic-audit-input.json",
+            {
+                "prompt_version": AUDIT_PROMPT_VERSION,
+                "prompt_sha256": _sha256(audit_prompt),
+                "model": auditor.model,
+                "instructions": audit_prompt,
+                "audit_input": audit_input.model_dump(mode="json"),
+            },
+        )
+        call_start = time.perf_counter()
+        metrics.openai_calls += 1
+        metrics.audit_calls += 1
+        audit_execution = auditor.audit(instructions=audit_prompt, audit_input=audit_input)
+        audit_latency = _elapsed_ms(call_start)
+        metrics.openai_latency_ms += audit_latency
+        metrics.audit_latency_ms += audit_latency
+        metrics.audit_input_tokens = audit_execution.input_tokens
+        metrics.audit_output_tokens = audit_execution.output_tokens
+        metrics.input_tokens += audit_execution.input_tokens
+        metrics.output_tokens += audit_execution.output_tokens
+        storage.write_json("semantic-audit.json", audit_execution.response)
+        storage.write_json(
+            "semantic-audit-response.json",
+            {
+                "response_id": audit_execution.response_id,
+                "model": auditor.model,
+                "input_tokens": audit_execution.input_tokens,
+                "output_tokens": audit_execution.output_tokens,
+            },
+        )
+
+        stage = "admission"
+        admitted_draft, admission = apply_semantic_audit(
+            raw_draft,
+            audit_input,
+            audit_execution.response,
+        )
+        storage.write_json("admission-diff.json", admission)
+        storage.write_json("admitted-draft.json", admitted_draft)
+
+        stage = "final_validation"
+        final_validation = validate_draft(
+            admitted_draft,
+            app_input=app_input,
+            sources=sources_by_id,
+            snippets=snippets,
+        )
+        storage.write_json("final-validation.json", final_validation)
+        if not final_validation.valid:
+            raise PipelineFailure(
+                "Admitted draft failed deterministic validation with "
+                f"{len(final_validation.errors)} error(s)"
             )
 
         stage = "finalization"
         final = build_final_record(
-            draft=normalized_draft,
+            draft=admitted_draft,
             app_input=app_input,
             sources=sources_by_id,
-            model=extractor.model,
+            snippets=snippets,
+            extraction_model=extractor.model,
+            audit_model=auditor.model,
         )
         storage.write_json("final.json", final)
         metrics.total_latency_ms = _elapsed_ms(pipeline_start)
         storage.write_json("metrics.json", metrics)
         return PipelineResult(
             final=final,
-            validation=validation,
+            validation=final_validation,
             metrics=metrics,
             app_dir=storage.app_dir.resolve(),
         )
