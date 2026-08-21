@@ -15,6 +15,9 @@ dependencies = [
   "typer",
 ]
 
+[project.scripts]
+research = "integration_research.cli:app"
+
 [dependency-groups]
 dev = [
   "mypy",

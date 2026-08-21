@@ -4,9 +4,9 @@ This repository is the foundation for an evidence-backed research pipeline that 
 
 ## Current status
 
-Only the repository scaffold is implemented. It includes the authoritative assignment context, canonical input data, locked Python dependencies, project guidance, tests, and continuous integration checks.
+Milestone 1 implements one synchronous, evidence-backed production path for GitHub (app ID 61). It uses deterministic Composio searches, official-source selection, bounded source reduction, one tool-free OpenAI structured extraction, deterministic evidence validation, and a rule-computed buildability verdict.
 
-The research pipeline, command-line interface, Composio session, tool wrappers, prompts, pilot run, results, and HTML case study do not exist yet.
+MCP verification, Browser Tool fallback, concurrency, the five-app pilot, the remaining 99 apps, and the HTML case study are intentionally deferred.
 
 ## Requirements
 
@@ -42,26 +42,37 @@ uv run --frozen mypy src tests
 uv run --frozen pytest
 ```
 
+## Run Milestone 1
+
+Put `OPENAI_API_KEY` and `COMPOSIO_API_KEY` in the ignored `.env`, then run only GitHub:
+
+```bash
+uv run --frozen research run --app-id 61 --run-id github-milestone-1
+```
+
+The immutable record and its supporting artifacts are written under:
+
+```text
+runs/github-milestone-1/apps/061-github/
+```
+
+The command rejects every app ID other than 61. A validation failure preserves the draft,
+validation report, metrics, and failure details but does not create `final.json`.
+
 ## Repository contracts
 
 - `docs/COMPOSIO_TAKEHOME_CONTEXT.md` is the authoritative project brief.
 - `data/apps.csv` is the canonical 100-app input.
 - `src/integration_research/` is the Python package.
-- `prompts/` will contain versioned model prompts once extraction work begins.
-- `docs/composio-tool-schemas/` will contain schemas observed from the authenticated Composio CLI.
+- `prompts/` contains the versioned, source-only extraction prompt.
+- `docs/composio-tool-schemas/` contains schemas observed from the authenticated Composio CLI.
 - `runs/` is reserved for generated run artifacts and is ignored except for its placeholder.
 - `.state/` will contain reusable local session state and is fully ignored.
 
 ## Deferred next milestone
 
-The next milestone is live-tool setup, not pipeline implementation:
-
-1. Install and authenticate the Composio CLI.
-2. Inspect and save the exact approved tool schemas.
-3. Run one Composio search and one URL-content fetch smoke test.
-4. Record the observed input and response shapes before writing wrappers.
-
-No external service has been authenticated or called by this scaffold.
+After the GitHub record has been inspected, the next milestone is the five-app pilot for IDs
+`61,22,31,90,98`. Do not run the other apps or add the verifier before that review.
 
 ## Core project rules
 

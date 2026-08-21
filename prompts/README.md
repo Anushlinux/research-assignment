@@ -1,5 +1,5 @@
 # Prompts
 
-Versioned extraction and verification prompts will live here when those pipeline stages are implemented.
+`extract.md` is the versioned Milestone 1 prompt for one tool-free structured extraction over fetched GitHub sources.
 
-No prompt is included during repository setup because its schema and tool contracts have not yet been verified.
+The future verifier prompt is intentionally absent. MCP verification and Browser Tool fallback are outside Milestone 1.
