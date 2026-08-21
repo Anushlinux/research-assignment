@@ -5,15 +5,16 @@
 
 from __future__ import annotations
 
+import csv
 import html
 import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RESULTS_PATH = ROOT / "runs" / "full-100-20260822-consolidated" / "results.json"
 VERIFICATION_PATH = ROOT / "verification" / "manual_sample.json"
 OUTPUT_PATH = ROOT / "docs" / "index.html"
+APPS_PATH = ROOT / "data" / "apps.csv"
 
 
 def clean(value: object) -> str:
@@ -29,8 +30,113 @@ def first_line(value: object) -> str:
     return lines[0] if lines else ""
 
 
+def resolved_value(record: dict[str, object], field: str) -> str:
+    value = record.get(field)
+    if isinstance(value, dict):
+        return clean(value.get("value")) or "unknown"
+    return clean(value) or "unknown"
+
+
+def evidence_urls(value: object) -> set[str]:
+    urls: set[str] = set()
+    if isinstance(value, dict):
+        url = value.get("url")
+        if isinstance(url, str) and url:
+            urls.add(url)
+        for child in value.values():
+            urls.update(evidence_urls(child))
+    elif isinstance(value, list):
+        for child in value:
+            urls.update(evidence_urls(child))
+    return urls
+
+
+def load_results() -> list[dict[str, object]]:
+    """Consolidate the latest accepted v2c artifacts and terminal failures."""
+
+    with APPS_PATH.open(encoding="utf-8", newline="") as handle:
+        catalog = {int(row["id"]): row for row in csv.DictReader(handle)}
+
+    finals: dict[int, tuple[dict[str, object], Path]] = {}
+    failures: dict[int, tuple[dict[str, object], Path]] = {}
+    for path in sorted(ROOT.glob("runs/full-100-accuracy-v2c-*/apps/*/final.json")):
+        record = json.loads(path.read_text(encoding="utf-8"))
+        finals[int(record["app_id"])] = (record, path)
+    for path in sorted(ROOT.glob("runs/full-100-accuracy-v2c-*/apps/*/failure.json")):
+        app_id = int(path.parent.name.split("-", 1)[0])
+        failures[app_id] = (json.loads(path.read_text(encoding="utf-8")), path)
+
+    rows: list[dict[str, object]] = []
+    for app_id, app in sorted(catalog.items()):
+        if app_id in finals:
+            record, path = finals[app_id]
+            auth = "; ".join(
+                dict.fromkeys(clean(item.get("method")) for item in record["auth_methods"])
+            )
+            styles = "; ".join(
+                dict.fromkeys(clean(item.get("value")) for item in record["api_styles"])
+            )
+            blocker = record.get("blocker")
+            blocker_text = clean(blocker.get("value")) if isinstance(blocker, dict) else ""
+            rows.append(
+                {
+                    "id": app_id,
+                    "app": record["app_name"],
+                    "category": record["category"],
+                    "website_hint": record["website_hint"],
+                    "status": record["status"],
+                    "attempts": 2 if "retry" in str(path) else 1,
+                    "buildability": resolved_value(record, "buildability"),
+                    "auth": auth or "unknown",
+                    "credential_access": resolved_value(record, "credential_access"),
+                    "production_gate": resolved_value(record, "production_gate"),
+                    "api_availability": resolved_value(record, "api_availability"),
+                    "api_styles": styles or "unknown",
+                    "api_breadth": resolved_value(record, "api_breadth"),
+                    "mcp_status": resolved_value(record, "mcp_status"),
+                    "blocker_or_failure": blocker_text,
+                    "unresolved_questions": " | ".join(record["unresolved_questions"]),
+                    "unresolved_count": len(record["unresolved_questions"]),
+                    "evidence_urls": " | ".join(sorted(evidence_urls(record))),
+                    "artifact_path": str(path),
+                    "source_run": path.parents[2].name,
+                }
+            )
+            continue
+
+        failure, path = failures[app_id]
+        rows.append(
+            {
+                "id": app_id,
+                "app": app["app_name"],
+                "category": app["category"],
+                "website_hint": app["website_hint"],
+                "status": "failed_after_retries",
+                "attempts": 2,
+                "buildability": "unknown",
+                "auth": "unknown",
+                "credential_access": "unknown",
+                "production_gate": "unknown",
+                "api_availability": "unknown",
+                "api_styles": "unknown",
+                "api_breadth": "unknown",
+                "mcp_status": "unknown",
+                "blocker_or_failure": failure["message"],
+                "unresolved_questions": "",
+                "unresolved_count": 0,
+                "evidence_urls": "",
+                "artifact_path": str(path.parent),
+                "source_run": path.parents[2].name,
+            }
+        )
+
+    if len(rows) != 100 or set(catalog) != {int(row["id"]) for row in rows}:
+        raise RuntimeError("The v2c artifacts do not cover all 100 catalog apps")
+    return rows
+
+
 def build() -> None:
-    results = json.loads(RESULTS_PATH.read_text(encoding="utf-8"))
+    results = load_results()
     verification = json.loads(VERIFICATION_PATH.read_text(encoding="utf-8"))
 
     categories: dict[str, dict[str, Counter[str]]] = defaultdict(
@@ -84,6 +190,11 @@ def build() -> None:
     )
 
     verdict_labels = {"yes": "Build now", "conditional": "Conditional", "unknown": "Not proven"}
+    status_labels = {
+        "verified": "Verified",
+        "needs_human_review": "Human review",
+        "failed_after_retries": "Retrieval failed",
+    }
     table_rows = []
     for row in results:
         evidence = clean(row["evidence_urls"]).split(" | ")[0]
@@ -103,6 +214,7 @@ def build() -> None:
               <td>{row["id"]}</td>
               <th scope="row">{esc(row["app"])}</th>
               <td>{esc(row["category"])}</td>
+              <td><span class="pill status-{esc(row["status"])}">{status_labels[row["status"]]}</span></td>
               <td><span class="pill verdict-{esc(row["buildability"])}">{verdict_labels[row["buildability"]]}</span></td>
               <td>{esc(clean(row["auth"]).replace("; ", ", "))}</td>
               <td>{esc(access)}</td>
@@ -118,6 +230,15 @@ def build() -> None:
         row["buildability"] == "yes" and row["credential_access"] in {"self_serve", "not_required"}
         for row in results
     )
+    completed_count = sum(row["status"] != "failed_after_retries" for row in results)
+    failed_count = len(results) - completed_count
+    verified_count = sum(row["status"] == "verified" for row in results)
+    review_count = sum(row["status"] == "needs_human_review" for row in results)
+    credential_unknown = sum(
+        row["credential_access"] == "unknown" and row["status"] != "failed_after_retries"
+        for row in results
+    )
+    best_category, best_counts = max(categories.items(), key=lambda item: item[1]["build"]["yes"])
 
     page = TEMPLATE
     replacements = {
@@ -128,6 +249,14 @@ def build() -> None:
         "{{CATEGORY_OPTIONS}}": category_options,
         "{{YES_COUNT}}": str(yes_count),
         "{{EASY_WINS}}": str(easy_wins),
+        "{{COMPLETED_COUNT}}": str(completed_count),
+        "{{FAILED_COUNT}}": str(failed_count),
+        "{{VERIFIED_COUNT}}": str(verified_count),
+        "{{REVIEW_COUNT}}": str(review_count),
+        "{{CREDENTIAL_UNKNOWN}}": str(credential_unknown),
+        "{{BEST_CATEGORY}}": esc(best_category),
+        "{{BEST_BUILD}}": str(best_counts["build"]["yes"]),
+        "{{BEST_SELF_SERVE}}": str(best_counts["access"]["self_serve"]),
         "{{AUTH_KEY}}": str(auth_counts["api_key"]),
         "{{AUTH_OAUTH}}": str(auth_counts["oauth2"]),
         "{{AUTH_TOKEN}}": str(auth_counts["token"]),
@@ -190,6 +319,7 @@ TEMPLATE = """<!doctype html>
     .human { border-top:3px solid var(--amber); }
     .proof-grid { display:grid; grid-template-columns:.8fr 1.2fr; gap:18px; }
     .card { padding:24px; border:1px solid var(--line); background:var(--paper); border-radius:var(--radius); }
+    .card-wide { grid-column:1 / -1; }
     .card p { color:var(--muted); }
     pre { overflow:auto; margin:18px 0; padding:16px; background:#171715; color:#f7f7f5; border-radius:8px; font:12px/1.6 ui-monospace,SFMono-Regular,monospace; }
     .button { display:inline-flex; min-height:42px; align-items:center; padding:0 15px; border-radius:8px; background:var(--blue); color:#fff; text-decoration:none; font-weight:700; transition:transform 140ms var(--ease-out); }
@@ -201,6 +331,9 @@ TEMPLATE = """<!doctype html>
     .clean,.verdict-yes { color:var(--green); background:#e5f3eb; }
     .fixed,.verdict-conditional { color:var(--amber); background:#f7efd9; }
     .verdict-unknown { color:var(--muted); }
+    .status-verified { color:var(--green); background:#e5f3eb; }
+    .status-needs_human_review { color:var(--amber); background:#f7efd9; }
+    .status-failed_after_retries { color:var(--red); background:#f8e5e3; }
     .failures { columns:2; padding:0; margin:0; list-style:none; }
     .failures li { break-inside:avoid; display:grid; gap:4px; padding:13px 0; border-bottom:1px solid var(--line); }
     .failures span { color:var(--muted); font-size:12px; }
@@ -228,17 +361,17 @@ TEMPLATE = """<!doctype html>
         <p>An agent attempted all 100 apps. It found many callable surfaces, but documentation often failed to prove who can create credentials, which plan is required, or whether production approval is needed.</p>
         <div class="scoreboard" aria-label="Headline results">
           <div class="score"><strong>100</strong><span>apps attempted</span></div>
-          <div class="score"><strong>92</strong><span>completed records</span></div>
+          <div class="score"><strong>{{COMPLETED_COUNT}}</strong><span>accepted records</span></div>
           <div class="score"><strong>{{YES_COUNT}}</strong><span>buildable now</span></div>
-          <div class="score"><strong>8</strong><span>unresolved after retries</span></div>
+          <div class="score"><strong>{{FAILED_COUNT}}</strong><span>failed after retries</span></div>
         </div>
       </div>
       <section id="findings">
         <div class="section-head"><h2>What the research says</h2><p>Four conclusions a reviewer should remember.</p></div>
         <div class="answers">
           <article class="answer"><span class="label">Dominant auth</span><strong>API key {{AUTH_KEY}} · OAuth 2.0 {{AUTH_OAUTH}} · Token {{AUTH_TOKEN}}</strong><p>Apps can support more than one method, so these counts overlap.</p></article>
-          <article class="answer"><span class="label">Best starting point</span><strong>Productivity is the clearest entry point.</strong><p>Six of ten apps are directly buildable; eight have confirmed self-serve access.</p></article>
-          <article class="answer"><span class="label">Most common blocker</span><strong>47 credential paths remain unproven.</strong><p>The API may exist, but the docs do not establish a usable production-access path.</p></article>
+          <article class="answer"><span class="label">Best starting point</span><strong>{{BEST_CATEGORY}} is the clearest entry point.</strong><p>{{BEST_BUILD}} of ten apps are directly buildable; {{BEST_SELF_SERVE}} have confirmed self-serve access.</p></article>
+          <article class="answer"><span class="label">Evidence boundary</span><strong>{{CREDENTIAL_UNKNOWN}} accepted records still have an unproven credential path.</strong><p>The API may exist, but the docs do not always establish usable production access.</p></article>
           <article class="answer"><span class="label">Recommended action</span><strong>Start with {{EASY_WINS}} easy wins. Use outreach for gated apps.</strong><p>Do not mistake missing evidence for “no API.” Keep it unknown until sales, admin, or partner access confirms it.</p></article>
         </div>
       </section>
@@ -257,25 +390,26 @@ TEMPLATE = """<!doctype html>
         </div>
       </section>
       <section id="proof">
-        <div class="section-head"><h2>Proof and verification</h2><p>The application is runnable, and the first pass visibly improved after verification.</p></div>
+        <div class="section-head"><h2>Proof and verification</h2><p>The complete rerun preserves evidence and separates verified output from output that still needs a person.</p></div>
         <div class="proof-grid">
           <article class="card"><h3>Run the agent</h3><p>Every attempt preserves search, source, snippet, draft, audit, diff, validation, and final artifacts.</p><pre><code>uv sync --frozen
 
 uv run --frozen research run \\
   --app-id 61 \\
   --run-id github-check</code></pre><a class="button" href="https://github.com/Anushlinux/research-assignment/tree/codex/milestone-1-1-hardening">Open source and README</a></article>
-          <article class="card"><h3>12-app accuracy sample</h3><div class="accuracy"><strong>52/60</strong><span class="arrow">→</span><strong>60/60</strong></div><p>Five material claims were checked for each sampled app. Six apps were clean; six needed at least one correction. This measures agreement with the stored official evidence, not a claimed global accuracy score.</p><div class="table-shell"><table><thead><tr><th>App</th><th>First pass</th><th>Final</th><th>Result</th><th>Evidence</th></tr></thead><tbody>{{VERIFICATION_ROWS}}</tbody></table></div></article>
+          <article class="card"><h3>New 100-app rerun</h3><div class="accuracy"><strong>289 unknowns</strong><span class="arrow">→</span><strong>200 unknowns</strong></div><p>Across 94 comparable accepted outputs and eight common decision fields, the new retrieval pass removed 89 unknown values. The final gate admitted {{VERIFIED_COUNT}} records as verified and marked {{REVIEW_COUNT}} for human review. This proves stronger evidence coverage, not perfect factual accuracy.</p></article>
+          <article class="card card-wide"><h3>12-app claim-to-evidence sample</h3><div class="accuracy"><strong>52/60 supported</strong><span class="arrow">→</span><strong>60/60 after correction</strong></div><p>Five material claims were manually checked for each sampled app against stored official-source excerpts. Six apps were clean; six exposed a miss that the admission pass corrected. This validates the sampled claim-to-evidence decisions, not a global accuracy score for all 100 apps.</p><div class="table-shell"><table><thead><tr><th>App</th><th>First pass</th><th>After correction</th><th>Outcome</th><th>Evidence</th></tr></thead><tbody>{{VERIFICATION_ROWS}}</tbody></table></div></article>
         </div>
       </section>
-      <section><div class="section-head"><h2>What failed honestly</h2><p>Eight apps stayed unresolved. They remain visible instead of being silently dropped.</p></div><ul class="failures">{{FAILURE_ROWS}}</ul></section>
+      <section><div class="section-head"><h2>What failed honestly</h2><p>{{FAILED_COUNT}} apps still failed after retries. They remain visible instead of being silently dropped.</p></div><ul class="failures">{{FAILURE_ROWS}}</ul></section>
       <section id="results">
         <div class="section-head"><h2>All 100 apps</h2><p>Server-rendered in catalog order. Salesforce is row 1 even when JavaScript is disabled.</p></div>
         <div class="controls"><input id="search" type="search" aria-label="Search apps" placeholder="Search app, auth, category, or blocker"><select id="category" aria-label="Filter category"><option value="">All categories</option>{{CATEGORY_OPTIONS}}</select><select id="verdict" aria-label="Filter verdict"><option value="">All verdicts</option><option value="yes">Build now</option><option value="conditional">Conditional</option><option value="unknown">Not proven</option></select></div>
         <p class="results-meta"><strong id="result-count">100</strong> apps shown</p>
-        <div class="table-shell"><table class="apps-table"><thead><tr><th>#</th><th>App</th><th>Category</th><th>Verdict</th><th>Auth</th><th>Access</th><th>Evidence</th></tr></thead><tbody id="app-rows">{{TABLE_ROWS}}</tbody></table></div>
+        <div class="table-shell"><table class="apps-table"><thead><tr><th>#</th><th>App</th><th>Category</th><th>Status</th><th>Verdict</th><th>Auth</th><th>Access</th><th>Evidence</th></tr></thead><tbody id="app-rows">{{TABLE_ROWS}}</tbody></table></div>
       </section>
     </main>
-    <footer>Evidence-backed integration research · 100 attempted · 92 completed · 8 unresolved · August 2026</footer>
+    <footer>Evidence-backed integration research · 100 attempted · {{COMPLETED_COUNT}} accepted · {{FAILED_COUNT}} failed after retries · August 2026</footer>
   </div>
   <script>
     const search = document.querySelector('#search');

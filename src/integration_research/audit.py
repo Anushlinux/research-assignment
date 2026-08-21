@@ -38,7 +38,7 @@ from integration_research.validation import (
     normalize_evidence_text,
 )
 
-AUDIT_PROMPT_VERSION = "catalog-evidence-audit-v2"
+AUDIT_PROMPT_VERSION = "catalog-evidence-audit-v3"
 AUDIT_PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "audit.md"
 
 FIELD_DEFINITIONS: dict[str, str] = {

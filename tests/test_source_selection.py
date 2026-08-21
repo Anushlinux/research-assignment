@@ -2,6 +2,7 @@ from integration_research.models import AppInput, SourceRole, SourceTier
 from integration_research.source_selection import (
     ROLE_ORDER,
     build_search_plans,
+    build_targeted_search_plan,
     candidates_from_trusted_seeds,
     derive_trusted_source_policy,
     normalize_url,
@@ -149,6 +150,63 @@ def test_same_url_can_be_selected_for_multiple_roles() -> None:
         SourceRole.CREDENTIAL_ACCESS,
     ]
     assert len({candidate.normalized_url for candidate in selected}) == 1
+
+
+def test_two_distinct_pages_are_selected_for_each_critical_role() -> None:
+    catalog_app = app(10, "Generic Product", "docs.generic.example")
+    policy = derive_trusted_source_policy(catalog_app)
+    candidates = []
+    for role in ROLE_ORDER:
+        count = (
+            2
+            if role
+            in {
+                SourceRole.AUTHENTICATION,
+                SourceRole.CREDENTIAL_ACCESS,
+                SourceRole.API_SURFACE,
+            }
+            else 1
+        )
+        for index in range(count):
+            candidate = rank_candidate(
+                policy=policy,
+                role=role,
+                query="generic query",
+                title=f"{role.value} authentication credentials API endpoint pricing MCP",
+                url=f"https://docs.generic.example/api/{role.value}/{index}",
+                search_position=index,
+            )
+            assert candidate is not None
+            candidates.append(candidate)
+
+    selected = select_sources(candidates, maximum=8)
+
+    assert len(selected) == 8
+    for role in (
+        SourceRole.AUTHENTICATION,
+        SourceRole.CREDENTIAL_ACCESS,
+        SourceRole.API_SURFACE,
+    ):
+        assert len({item.normalized_url for item in selected if item.role == role}) == 2
+
+
+def test_targeted_recovery_query_is_catalog_anchored() -> None:
+    catalog_app = app(4, "Attio", "attio.com")
+    plan = build_targeted_search_plan(catalog_app, "auth_methods")
+
+    assert plan.role == SourceRole.AUTHENTICATION
+    assert "site:attio.com" in plan.query
+    assert '"Attio"' in plan.query
+    assert "authorization code" in plan.query
+
+
+def test_root_domain_queries_include_probable_developer_subdomains() -> None:
+    catalog_app = app(6, "Podio", "podio.com")
+    plan = build_targeted_search_plan(catalog_app, "api_availability")
+
+    assert "site:podio.com" in plan.query
+    assert "site:developers.podio.com" in plan.query
+    assert "site:docs.podio.com" in plan.query
 
 
 def test_normalize_url_removes_tracking_fragment_and_default_port() -> None:

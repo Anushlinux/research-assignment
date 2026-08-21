@@ -96,6 +96,14 @@ class Buildability(StrEnum):
     UNKNOWN = "unknown"
 
 
+class RecordStatus(StrEnum):
+    FIRST_PASS_STRUCTURALLY_VALID = "first_pass_structurally_valid"
+    NEEDS_VERIFICATION = "needs_verification"
+    VERIFIED = "verified"
+    NEEDS_HUMAN_REVIEW = "needs_human_review"
+    FAILED = "failed"
+
+
 class SourceTier(StrEnum):
     OFFICIAL_DEVELOPER_DOCS = "official_developer_docs"
     OFFICIAL_REPOSITORY = "official_repository"
@@ -120,8 +128,8 @@ class AuditDecision(StrEnum):
 
 
 class EvidenceRef(StrictModel):
-    source_id: str = Field(pattern=r"^source_[1-5]$")
-    snippet_id: str = Field(pattern=r"^source_[1-5]_snippet_[0-9]{3}$")
+    source_id: str = Field(pattern=r"^source_[1-9][0-9]*$")
+    snippet_id: str = Field(pattern=r"^source_[1-9][0-9]*_snippet_[0-9]{3}$")
 
 
 class Claim[ValueT](StrictModel):
@@ -137,8 +145,11 @@ class AuthMethodDraft(StrictModel):
     @model_validator(mode="after")
     def validate_details(self) -> AuthMethodDraft:
         if self.method == AuthMethod.UNKNOWN:
-            if self.evidence:
-                raise ValueError("unknown authentication must not carry evidence")
+            # Conditional evidence constraints are not represented in the JSON schema sent to the
+            # model. Normalize an otherwise useful structured response instead of failing the whole
+            # bounded recovery pass after the model attaches evidence to `unknown`.
+            self.details = None
+            self.evidence = []
             return self
         if self.details is None or not self.details.strip():
             raise ValueError("known authentication requires implementation details")
@@ -173,15 +184,44 @@ class AppResearchDraft(StrictModel):
 
     @model_validator(mode="after")
     def validate_enum_collections(self) -> AppResearchDraft:
-        auth_values = [item.method for item in self.auth_methods]
-        if len(set(auth_values)) != len(auth_values):
-            raise ValueError("auth_methods contains duplicate values")
-        if AuthMethod.UNKNOWN in auth_values and len(auth_values) > 1:
-            raise ValueError("unknown authentication cannot coexist with confirmed methods")
+        merged_auth: dict[AuthMethod, AuthMethodDraft] = {}
+        for item in self.auth_methods:
+            existing = merged_auth.get(item.method)
+            if existing is None:
+                merged_auth[item.method] = item
+                continue
+            details = list(
+                dict.fromkeys(
+                    detail
+                    for detail in (existing.details, item.details)
+                    if detail is not None and detail.strip()
+                )
+            )
+            evidence = list(
+                {
+                    (reference.source_id, reference.snippet_id): reference
+                    for reference in [*existing.evidence, *item.evidence]
+                }.values()
+            )
+            existing.details = "; ".join(details) if details else None
+            existing.evidence = evidence
+        if len(merged_auth) > 1:
+            merged_auth.pop(AuthMethod.UNKNOWN, None)
+        self.auth_methods = list(merged_auth.values())
 
-        style_values = [claim.value for claim in self.api_styles]
-        if len(set(style_values)) != len(style_values):
-            raise ValueError("api_styles contains duplicate values")
+        merged_styles: dict[ApiStyle, Claim[ApiStyle]] = {}
+        for claim in self.api_styles:
+            existing_style = merged_styles.get(claim.value)
+            if existing_style is None:
+                merged_styles[claim.value] = claim
+                continue
+            existing_style.evidence = list(
+                {
+                    (reference.source_id, reference.snippet_id): reference
+                    for reference in [*existing_style.evidence, *claim.evidence]
+                }.values()
+            )
+        self.api_styles = list(merged_styles.values())
         return self
 
 
@@ -213,6 +253,14 @@ class ApiCapabilitiesFinal(StrictModel):
     write: ResolvedClaim[Ternary]
 
 
+class CompletenessReport(StrictModel):
+    critical_unknown_fields: list[str]
+    weak_source_roles: list[str]
+    generic_homepage_only_roles: list[str]
+    requires_verification: bool
+    eligible_for_final_export: bool
+
+
 class FinalAppResearch(StrictModel):
     app_id: int
     app_name: str
@@ -237,6 +285,8 @@ class FinalAppResearch(StrictModel):
     unresolved_questions: list[str]
     buildability: Buildability
     integration_paths: list[str]
+    status: RecordStatus
+    completeness: CompletenessReport
     generated_at: datetime
     extraction_model: str
     audit_model: str
@@ -270,8 +320,8 @@ class FetchedSource(StrictModel):
 
 
 class EvidenceSnippet(StrictModel):
-    snippet_id: str = Field(pattern=r"^source_[1-5]_snippet_[0-9]{3}$")
-    source_id: str = Field(pattern=r"^source_[1-5]$")
+    snippet_id: str = Field(pattern=r"^source_[1-9][0-9]*_snippet_[0-9]{3}$")
+    source_id: str = Field(pattern=r"^source_[1-9][0-9]*$")
     text: str = Field(min_length=1, max_length=500)
 
 

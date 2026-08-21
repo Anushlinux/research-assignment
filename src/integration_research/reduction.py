@@ -113,7 +113,10 @@ def build_evidence_snippets(
     for source in sources:
         seen: set[str] = set()
         source_snippets: list[str] = []
-        blocks = re.split(r"\n\s*\n|\n", reduced[source.source_id])
+        # Keep soft line wraps inside one paragraph. Documentation renderers often wrap Markdown
+        # links across lines; splitting every line can create malformed snippets such as
+        # ``[HTTP Basic`` that no longer match the normalized source text.
+        blocks = re.split(r"\n\s*\n", reduced[source.source_id])
         for block in blocks:
             for part in _bounded_snippet_parts(block):
                 if part in seen:

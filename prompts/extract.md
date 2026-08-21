@@ -1,6 +1,6 @@
 # Integration research extraction
 
-Prompt version: `catalog-extract-v2`
+Prompt version: `catalog-extract-v3`
 
 Extract integration facts about the named catalog app from the supplied fetched sources.
 
@@ -23,6 +23,16 @@ Extract integration facts about the named catalog app from the supplied fetched 
   `details`. Do not create a second method for the Authorization transport scheme.
 - OAuth2 requires text explicitly establishing OAuth 2.0 or dedicated OAuth application
   documentation. The words “OAuth token” alone are insufficient.
+- Only classify authentication used by a developer interface. Normal product login, Google login,
+  email login, SAML login, or employee single sign-on is not API authentication evidence.
+- State the integration surface in `details`: REST API, GraphQL API, public app, private workspace
+  integration, hosted MCP, or local CLI.
+- Dedicated OAuth application documentation that establishes an authorization-code flow, client
+  ID, client secret, authorization endpoint, token endpoint, and bearer access token maps to
+  `oauth2`.
+- Do not add `token` merely because an OAuth access token is transported as a bearer token.
+- Do not classify a client ID and client secret as `api_key` unless the documentation calls it an
+  API key or describes an equivalent static key.
 - A fully local CLI or library path may use `none` authentication and `not_required` credential
   access when the source positively documents installation plus a command or function operating on
   local inputs and outputs without an external account or service. Cite that local invocation. Do

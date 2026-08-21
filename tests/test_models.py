@@ -18,11 +18,48 @@ def test_schema_accepts_multiple_confirmed_auth_methods_with_details() -> None:
     assert len(validated.auth_methods) == 2
 
 
-def test_schema_rejects_unknown_with_confirmed_auth() -> None:
+def test_schema_drops_unknown_when_confirmed_auth_exists() -> None:
     payload = make_valid_draft().model_dump()
     payload["auth_methods"].append({"method": "unknown", "details": None, "evidence": []})
-    with pytest.raises(ValidationError, match="unknown authentication"):
-        AppResearchDraft.model_validate(payload)
+    validated = AppResearchDraft.model_validate(payload)
+
+    assert [item.method for item in validated.auth_methods] == [AuthMethod.TOKEN]
+
+
+def test_schema_merges_duplicate_auth_and_api_style_evidence() -> None:
+    payload = make_valid_draft().model_dump()
+    payload["auth_methods"].append(
+        {
+            "method": "token",
+            "details": "Second documented token surface",
+            "evidence": [{"source_id": "source_2", "snippet_id": "source_2_snippet_001"}],
+        }
+    )
+    payload["api_styles"].append(
+        {
+            "value": "rest",
+            "evidence": [{"source_id": "source_2", "snippet_id": "source_2_snippet_001"}],
+        }
+    )
+
+    validated = AppResearchDraft.model_validate(payload)
+
+    assert len(validated.auth_methods) == 1
+    assert "Second documented token surface" in (validated.auth_methods[0].details or "")
+    assert len(validated.auth_methods[0].evidence) == 2
+    rest = next(style for style in validated.api_styles if style.value.value == "rest")
+    assert len(rest.evidence) == 2
+
+
+def test_unknown_auth_drops_model_supplied_details_and_evidence() -> None:
+    item = AuthMethodDraft(
+        method=AuthMethod.UNKNOWN,
+        details="unsupported guess",
+        evidence=[EvidenceRef(source_id="source_1", snippet_id="source_1_snippet_001")],
+    )
+
+    assert item.details is None
+    assert item.evidence == []
 
 
 def test_schema_rejects_removed_auth_and_api_style_categories() -> None:

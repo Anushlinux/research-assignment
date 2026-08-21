@@ -16,7 +16,10 @@ class Settings(BaseSettings):
     composio_user_id: str = "composio-takehome-research"
     composio_session_id: str = ""
     research_max_searches_per_app: int = 5
-    research_max_fetches_per_app: int = 5
+    research_max_fetches_per_app: int = 8
+    research_max_verification_searches_per_app: int = 3
+    research_max_verification_fetches_per_app: int = 3
+    research_max_browser_tasks_per_app: int = 1
     research_max_chars_per_page: int = 20_000
     research_max_chars_per_app: int = 60_000
     runs_dir: Path = Path("runs")

@@ -11,7 +11,7 @@ from openai import OpenAI
 from integration_research.models import AppResearchDraft
 from integration_research.settings import Settings
 
-PROMPT_VERSION = "catalog-extract-v2"
+PROMPT_VERSION = "catalog-extract-v3"
 PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "extract.md"
 
 

@@ -29,13 +29,21 @@ def run_command(
         str | None,
         typer.Option("--ids", help="Comma-separated IDs, executed sequentially"),
     ] = None,
+    all_apps: Annotated[
+        bool,
+        typer.Option("--all", help="Run every app in data/apps.csv sequentially"),
+    ] = False,
 ) -> None:
     """Run one or more catalog apps sequentially with isolated artifacts."""
 
-    if (app_id is None) == (ids is None):
-        raise typer.BadParameter("Provide exactly one of --app-id or --ids")
+    selection_count = sum((app_id is not None, ids is not None, all_apps))
+    if selection_count != 1:
+        raise typer.BadParameter("Provide exactly one of --app-id, --ids, or --all")
+    catalog = load_app_catalog()
     if app_id is not None:
         app_ids = [app_id]
+    elif all_apps:
+        app_ids = sorted(catalog)
     else:
         assert ids is not None
         parts = [part.strip() for part in ids.split(",")]
@@ -48,7 +56,6 @@ def run_command(
     if len(app_ids) != len(set(app_ids)):
         raise typer.BadParameter("App IDs must not contain duplicates")
 
-    catalog = load_app_catalog()
     missing = [selected_id for selected_id in app_ids if selected_id not in catalog]
     if missing:
         raise typer.BadParameter(

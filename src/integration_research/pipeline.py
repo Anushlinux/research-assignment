@@ -23,6 +23,13 @@ from integration_research.audit import (
     build_audit_input,
     load_audit_prompt,
 )
+from integration_research.completeness import (
+    assess_completeness,
+    assess_source_quality,
+    auth_taxonomy_warnings,
+    disputed_fields_for_recovery,
+    merge_disputed_fields,
+)
 from integration_research.composio_session import (
     FETCH_TOOL,
     SEARCH_TOOL,
@@ -41,6 +48,7 @@ from integration_research.models import (
     AuditDecision,
     FetchedSource,
     FinalAppResearch,
+    RecordStatus,
     RunMetrics,
     SourceRole,
     ValidationReport,
@@ -54,6 +62,7 @@ from integration_research.settings import Settings
 from integration_research.source_selection import (
     SearchCandidate,
     build_search_plans,
+    build_targeted_search_plan,
     candidates_from_citations,
     candidates_from_trusted_seeds,
     derive_trusted_source_policy,
@@ -142,6 +151,7 @@ def _sha256(value: str) -> str:
 
 def _failure_payload(stage: str, error: Exception) -> dict[str, object]:
     return {
+        "status": RecordStatus.FAILED.value,
         "stage": stage,
         "error_type": type(error).__name__,
         "message": str(error),
@@ -282,6 +292,25 @@ def run_app_pipeline(
                 fetched_sources.append(source)
         if not fetched_sources:
             raise PipelineFailure("Every selected official source failed to fetch")
+        initial_quality: list[dict[str, object]] = []
+        for source in fetched_sources:
+            for role in source.source_roles or [source.source_role]:
+                if role not in {
+                    SourceRole.AUTHENTICATION,
+                    SourceRole.CREDENTIAL_ACCESS,
+                    SourceRole.API_SURFACE,
+                }:
+                    continue
+                quality = assess_source_quality(role=role, url=source.url, text=source.text)
+                initial_quality.append(
+                    {
+                        "source_id": source.source_id,
+                        "source_role": role.value,
+                        "url": source.url,
+                        **quality.as_dict(),
+                    }
+                )
+        storage.write_json("source-quality.json", initial_quality)
 
         stage = "reduction"
         reduced = reduce_sources(
@@ -422,6 +451,307 @@ def run_app_pipeline(
         storage.write_json("admission-diff.json", admission)
         storage.write_json("admitted-draft.json", admitted_draft)
 
+        first_pass_taxonomy_warnings = auth_taxonomy_warnings(admitted_draft, sources_by_id)
+        first_pass_completeness = assess_completeness(
+            admitted_draft,
+            sources_by_id,
+            taxonomy_warnings=first_pass_taxonomy_warnings,
+        )
+        storage.write_json("auth-taxonomy-warnings.json", first_pass_taxonomy_warnings)
+        storage.write_json("first-pass-completeness.json", first_pass_completeness)
+        storage.write_json(
+            "first-pass-status.json",
+            {
+                "structural_status": RecordStatus.FIRST_PASS_STRUCTURALLY_VALID.value,
+                "research_status": (
+                    RecordStatus.NEEDS_VERIFICATION.value
+                    if first_pass_completeness.requires_verification
+                    else RecordStatus.VERIFIED.value
+                ),
+            },
+        )
+
+        disputed_fields = disputed_fields_for_recovery(
+            first_pass_completeness,
+            limit=settings.research_max_verification_searches_per_app,
+        )
+        recovery_inference_failed = False
+        storage.write_json(
+            "verification/request.json",
+            {
+                "disputed_fields": disputed_fields,
+                "max_searches": settings.research_max_verification_searches_per_app,
+                "max_fetches": settings.research_max_verification_fetches_per_app,
+                "max_browser_tasks": settings.research_max_browser_tasks_per_app,
+                "browser_fallback_implemented": False,
+            },
+        )
+
+        if disputed_fields:
+            stage = "bounded_recovery"
+            verification_searches: list[dict[str, object]] = []
+            verification_quality: list[dict[str, object]] = []
+            additional_sources: list[FetchedSource] = []
+            verification_fetches = 0
+
+            for search_index, field in enumerate(disputed_fields, start=1):
+                plan = build_targeted_search_plan(app_input, field, policy)
+                call_start = time.perf_counter()
+                metrics.search_calls += 1
+                execution = client.execute(SEARCH_TOOL, {"query": plan.query})
+                latency = _elapsed_ms(call_start)
+                metrics.search_latency_ms += latency
+                search_record: dict[str, object] = {
+                    "field": field,
+                    "source_role": plan.role.value,
+                    "query": plan.query,
+                    "arguments": {"query": plan.query},
+                    "latency_ms": latency,
+                    "log_id": execution.log_id,
+                    "error": execution.error,
+                    "raw_response": execution.raw_response,
+                }
+                verification_searches.append(search_record)
+                storage.write_json(
+                    f"verification/searches/{search_index:02d}-{field}.json",
+                    search_record,
+                )
+                if execution.error is not None:
+                    continue
+
+                candidates = candidates_from_citations(
+                    policy=policy,
+                    role=plan.role,
+                    query=plan.query,
+                    citations=_dict_list(execution.data.get("citations")),
+                )
+                ranked = sorted(
+                    candidates,
+                    key=lambda candidate: (
+                        -candidate.score,
+                        candidate.search_position,
+                        candidate.normalized_url,
+                    ),
+                )
+                selected_candidate = next(
+                    (
+                        candidate
+                        for candidate in ranked
+                        if candidate.normalized_url not in source_id_by_url
+                    ),
+                    None,
+                )
+                if (
+                    selected_candidate is None
+                    or verification_fetches >= settings.research_max_verification_fetches_per_app
+                ):
+                    continue
+
+                candidate = selected_candidate
+                source_id = f"source_{len(source_id_by_url) + 1}"
+                source_id_by_url[candidate.normalized_url] = source_id
+                call_start = time.perf_counter()
+                metrics.fetch_calls += 1
+                verification_fetches += 1
+                fetch_execution = client.execute(
+                    FETCH_TOOL,
+                    {"urls": [candidate.normalized_url], "text": True},
+                )
+                fetch_latency = _elapsed_ms(call_start)
+                metrics.fetch_latency_ms += fetch_latency
+                results = _dict_list(fetch_execution.data.get("results"))
+                result = results[0] if results else {}
+                returned_url = result.get("url", candidate.normalized_url)
+                returned_title = result.get("title", candidate.title)
+                returned_text = result.get("text", "")
+                url = returned_url if isinstance(returned_url, str) else candidate.normalized_url
+                title = returned_title if isinstance(returned_title, str) else candidate.title
+                text = returned_text if isinstance(returned_text, str) else ""
+                tier = official_source_tier(url, policy)
+                successful = (
+                    fetch_execution.error is None
+                    and bool(text.strip())
+                    and tier is not None
+                    and policy.trusts_url(url)
+                )
+                source = FetchedSource(
+                    source_id=source_id,
+                    source_role=plan.role,
+                    source_roles=[plan.role],
+                    url=url,
+                    title=title,
+                    source_tier=tier or candidate.source_tier,
+                    text=text,
+                    successful=successful,
+                    retrieved_at=datetime.now(UTC),
+                    content_hash=_sha256(text),
+                    log_id=fetch_execution.log_id,
+                    raw_response=fetch_execution.raw_response,
+                    latency_ms=fetch_latency,
+                )
+                storage.write_json(f"sources/{source_id}.json", source)
+                quality = assess_source_quality(role=plan.role, url=url, text=text)
+                quality_record = {
+                    "field": field,
+                    "source_id": source_id,
+                    "source_role": plan.role.value,
+                    "url": url,
+                    "fetch_error": fetch_execution.error,
+                    **quality.as_dict(),
+                }
+                verification_quality.append(quality_record)
+                storage.write_json(
+                    f"verification/sources/{source_id}-quality.json",
+                    quality_record,
+                )
+                if successful:
+                    additional_sources.append(source)
+
+            storage.write_json("verification/searches.json", verification_searches)
+            storage.write_json("verification/source-quality.json", verification_quality)
+
+            if additional_sources:
+                first_pass_admitted = admitted_draft
+                recovery_reduced = reduce_sources(
+                    additional_sources,
+                    per_page_limit=settings.research_max_chars_per_page,
+                    per_app_limit=settings.research_max_chars_per_app,
+                )
+                recovery_snippets = build_evidence_snippets(
+                    additional_sources,
+                    recovery_reduced,
+                )
+                snippets = {**snippets, **recovery_snippets}
+                fetched_sources.extend(additional_sources)
+                sources_by_id.update({source.source_id: source for source in additional_sources})
+                recovery_source_package = build_source_package(
+                    additional_sources,
+                    recovery_snippets,
+                )
+                recovery_prompt = "\n\n".join(
+                    (
+                        extraction_prompt,
+                        "RECOVERY PASS: Treat the first-pass record as untrusted only for the "
+                        f"disputed fields {disputed_fields}. Copy every other field exactly. "
+                        "Use the newly fetched sources to correct only those disputed fields. "
+                        "Return unknown when the new evidence is still insufficient.",
+                    )
+                )
+                recovery_source_input = "\n".join(
+                    (
+                        "FIRST PASS RECORD",
+                        first_pass_admitted.model_dump_json(indent=2),
+                        "",
+                        "NEW RECOVERY SOURCES",
+                        recovery_source_package,
+                    )
+                )
+                storage.write_json(
+                    "verification/extraction-input.json",
+                    {
+                        "disputed_fields": disputed_fields,
+                        "prompt_version": PROMPT_VERSION,
+                        "prompt_sha256": _sha256(recovery_prompt),
+                        "model": extractor.model,
+                        "instructions": recovery_prompt,
+                        "source_input": recovery_source_input,
+                    },
+                )
+                try:
+                    call_start = time.perf_counter()
+                    metrics.openai_calls += 1
+                    metrics.extraction_calls += 1
+                    recovery_extraction = extractor.extract(
+                        instructions=recovery_prompt,
+                        source_input=recovery_source_input,
+                    )
+                    recovery_latency = _elapsed_ms(call_start)
+                    metrics.openai_latency_ms += recovery_latency
+                    metrics.extraction_latency_ms += recovery_latency
+                    metrics.input_tokens += recovery_extraction.input_tokens
+                    metrics.output_tokens += recovery_extraction.output_tokens
+                    metrics.extraction_input_tokens += recovery_extraction.input_tokens
+                    metrics.extraction_output_tokens += recovery_extraction.output_tokens
+                    storage.write_json(
+                        "verification/extraction-draft.json",
+                        recovery_extraction.draft,
+                    )
+
+                    normalized_recovery, recovery_normalizations = normalize_unknown_questions(
+                        recovery_extraction.draft
+                    )
+                    merged_draft = merge_disputed_fields(
+                        first_pass_admitted,
+                        normalized_recovery,
+                        disputed_fields,
+                    )
+                    storage.write_json("verification/merged-draft.json", merged_draft)
+                    recovery_literal = validate_draft(
+                        merged_draft,
+                        app_input=app_input,
+                        sources=sources_by_id,
+                        snippets=snippets,
+                        normalizations=recovery_normalizations,
+                    )
+                    storage.write_json(
+                        "verification/literal-validation.json",
+                        recovery_literal,
+                    )
+                    if not recovery_literal.valid:
+                        raise PipelineFailure(
+                            "Recovery draft failed literal validation; preserved first pass"
+                        )
+
+                    recovery_audit_input = build_audit_input(
+                        merged_draft,
+                        sources_by_id,
+                        snippets,
+                    )
+                    storage.write_json(
+                        "verification/semantic-audit-input.json",
+                        recovery_audit_input,
+                    )
+                    call_start = time.perf_counter()
+                    metrics.openai_calls += 1
+                    metrics.audit_calls += 1
+                    recovery_audit = auditor.audit(
+                        instructions=audit_prompt,
+                        audit_input=recovery_audit_input,
+                    )
+                    recovery_audit_latency = _elapsed_ms(call_start)
+                    metrics.openai_latency_ms += recovery_audit_latency
+                    metrics.audit_latency_ms += recovery_audit_latency
+                    metrics.input_tokens += recovery_audit.input_tokens
+                    metrics.output_tokens += recovery_audit.output_tokens
+                    metrics.audit_input_tokens += recovery_audit.input_tokens
+                    metrics.audit_output_tokens += recovery_audit.output_tokens
+                    storage.write_json(
+                        "verification/semantic-audit.json",
+                        recovery_audit.response,
+                    )
+                    recovery_admitted, recovery_admission = apply_semantic_audit(
+                        merged_draft,
+                        recovery_audit_input,
+                        recovery_audit.response,
+                    )
+                    storage.write_json(
+                        "verification/admission-diff.json",
+                        recovery_admission,
+                    )
+                    admitted_draft = recovery_admitted
+                    normalization_issues = [
+                        *normalization_issues,
+                        *recovery_normalizations,
+                    ]
+                    audit_execution = recovery_audit
+                except Exception as recovery_error:
+                    recovery_inference_failed = True
+                    storage.write_json(
+                        "verification/failure.json",
+                        _failure_payload("bounded_recovery_inference", recovery_error),
+                    )
+                    admitted_draft = first_pass_admitted
+
         stage = "final_validation"
         final_validation = validate_draft(
             admitted_draft,
@@ -438,6 +768,35 @@ def run_app_pipeline(
             )
 
         stage = "finalization"
+        final_taxonomy_warnings = auth_taxonomy_warnings(admitted_draft, sources_by_id)
+        final_completeness = assess_completeness(
+            admitted_draft,
+            sources_by_id,
+            taxonomy_warnings=final_taxonomy_warnings,
+        )
+        if recovery_inference_failed:
+            final_completeness = final_completeness.model_copy(
+                update={
+                    "critical_unknown_fields": list(
+                        dict.fromkeys(
+                            [
+                                *final_completeness.critical_unknown_fields,
+                                *disputed_fields,
+                            ]
+                        )
+                    ),
+                    "requires_verification": True,
+                    "eligible_for_final_export": False,
+                }
+            )
+        final_status = (
+            RecordStatus.VERIFIED
+            if final_completeness.eligible_for_final_export
+            else RecordStatus.NEEDS_HUMAN_REVIEW
+        )
+        storage.write_json("final-auth-taxonomy-warnings.json", final_taxonomy_warnings)
+        storage.write_json("final-completeness.json", final_completeness)
+        storage.write_json("final-status.json", {"status": final_status.value})
         final = build_final_record(
             draft=admitted_draft,
             app_input=app_input,
@@ -446,6 +805,8 @@ def run_app_pipeline(
             extraction_model=extractor.model,
             audit_model=auditor.model,
             official_domains=list(policy.seed_hosts),
+            status=final_status,
+            completeness=final_completeness,
         )
         storage.write_json("final.json", final)
         metrics.total_latency_ms = _elapsed_ms(pipeline_start)
@@ -475,6 +836,8 @@ def run_app_pipeline(
                 "unknown_fields": final_validation.unknown_fields,
                 "unresolved_questions": admitted_draft.unresolved_questions,
                 "buildability": final.buildability.value,
+                "record_status": final.status.value,
+                "completeness": final.completeness.model_dump(mode="json"),
                 "buildability_explanation": explain_buildability(admitted_draft),
                 "validation_errors": [
                     issue.model_dump(mode="json") for issue in final_validation.errors

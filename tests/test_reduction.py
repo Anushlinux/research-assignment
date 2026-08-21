@@ -40,3 +40,17 @@ def test_evidence_snippets_are_bounded_and_literal() -> None:
         quote_exists(snippet.text, source_map[snippet.source_id].text)
         for snippet in snippets.values()
     )
+
+
+def test_multiline_markdown_link_produces_literal_referenceable_snippet() -> None:
+    source = make_sources()["source_1"]
+    source.text = (
+        "We also support [HTTP Basic\n"
+        "Authentication](https://example.test/basic), where the password is blank."
+    )
+
+    snippets = build_evidence_snippets([source], {source.source_id: source.text})
+
+    assert snippets
+    assert all(quote_exists(snippet.text, source.text) for snippet in snippets.values())
+    assert any("HTTP Basic Authentication" in snippet.text for snippet in snippets.values())

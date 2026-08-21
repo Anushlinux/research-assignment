@@ -1,6 +1,10 @@
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
 from typer.testing import CliRunner
 
+from integration_research import cli
 from integration_research.cli import app
 
 runner = CliRunner()
@@ -33,6 +37,13 @@ def test_cli_rejects_invalid_or_ambiguous_id_selection() -> None:
     assert both.exit_code == 2
     assert "exactly one" in both.output
 
+    all_and_ids = runner.invoke(
+        app,
+        ["run", "--all", "--ids", "22,31", "--run-id", "ambiguous-all"],
+    )
+    assert all_and_ids.exit_code == 2
+    assert "exactly one" in all_and_ids.output
+
 
 def test_cli_rejects_duplicate_or_malformed_multi_ids() -> None:
     duplicate = runner.invoke(app, ["run", "--ids", "22,22", "--run-id", "duplicate"])
@@ -42,3 +53,30 @@ def test_cli_rejects_duplicate_or_malformed_multi_ids() -> None:
     malformed = runner.invoke(app, ["run", "--ids", "22,nope", "--run-id", "malformed"])
     assert malformed.exit_code == 2
     assert "integers" in malformed.output
+
+
+def test_cli_all_runs_every_catalog_app(monkeypatch: pytest.MonkeyPatch) -> None:
+    from integration_research.settings import Settings
+
+    selected: dict[str, object] = {}
+
+    def allow_live_run(_self: Settings) -> None:
+        return None
+
+    def capture_sequence(**kwargs: object) -> SimpleNamespace:
+        selected.update(kwargs)
+        return SimpleNamespace(
+            completed=[],
+            failures=[],
+            summary_path=Path("runs/full/run-summary.json"),
+            pilot_summary_path=Path("runs/full/pilot-summary.json"),
+        )
+
+    monkeypatch.setattr(Settings, "require_live_credentials", allow_live_run)
+    monkeypatch.setattr(cli, "run_app_sequence", capture_sequence)
+
+    result = runner.invoke(app, ["run", "--all", "--run-id", "full"])
+
+    assert result.exit_code == 0
+    assert selected["app_ids"] == list(range(1, 101))
+    assert selected["run_id"] == "full"

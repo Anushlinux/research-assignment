@@ -21,6 +21,7 @@ from integration_research.models import (
     CommercialRequirement,
     EvidenceRef,
     FinalAppResearch,
+    RecordStatus,
     RunMetrics,
     SemanticAuditInput,
     SemanticAuditResponse,
@@ -100,6 +101,77 @@ class FakeExtractionClient:
         )
 
 
+class RecoveryResearchClient(FakeResearchClient):
+    recovery_url = "https://docs.github.com/en/rest/authentication/create-api-key"
+    recovery_text = (
+        "In the developer portal, an administrator can create API key credentials from workspace "
+        "settings."
+    )
+
+    def execute(self, tool_slug: str, arguments: dict[str, object]) -> ToolExecution:
+        if tool_slug == SEARCH_TOOL:
+            query = arguments["query"]
+            assert isinstance(query, str)
+            if query not in {plan.query for plan in self._plans}:
+                self.calls.append((tool_slug, arguments))
+                data: dict[str, object] = {
+                    "citations": [
+                        {
+                            "title": "Create API key credentials in the developer portal",
+                            "url": self.recovery_url,
+                        }
+                    ]
+                }
+                return ToolExecution(
+                    data=data,
+                    error=None,
+                    log_id=f"log-{len(self.calls)}",
+                    raw_response={"data": data, "error": None},
+                )
+        if tool_slug == FETCH_TOOL and arguments["urls"] == [self.recovery_url]:
+            self.calls.append((tool_slug, arguments))
+            data = {
+                "results": [
+                    {
+                        "title": "Create API key credentials in the developer portal",
+                        "url": self.recovery_url,
+                        "text": self.recovery_text,
+                    }
+                ]
+            }
+            return ToolExecution(
+                data=data,
+                error=None,
+                log_id=f"log-{len(self.calls)}",
+                raw_response={"data": data, "error": None},
+            )
+        return super().execute(tool_slug, arguments)
+
+
+class SequencedExtractionClient:
+    model = "fake-structured-model"
+
+    def __init__(self, first: AppResearchDraft, recovery: AppResearchDraft) -> None:
+        self._drafts = [first, recovery]
+        self.calls = 0
+
+    def extract(self, *, instructions: str, source_input: str) -> ExtractionResult:
+        assert "Use only supplied source content" in instructions
+        if self.calls == 0:
+            assert "SOURCE source_1" in source_input
+        else:
+            assert "RECOVERY PASS" in instructions
+            assert "SOURCE source_6" in source_input
+        draft = self._drafts[self.calls]
+        self.calls += 1
+        return ExtractionResult(
+            draft=draft,
+            response_id=f"response-{self.calls}",
+            input_tokens=10,
+            output_tokens=5,
+        )
+
+
 class FakeAuditClient:
     model = "fake-audit-model"
 
@@ -141,6 +213,8 @@ def make_settings(tmp_path: Path) -> Settings:
         state_dir=tmp_path / ".state",
         research_max_searches_per_app=5,
         research_max_fetches_per_app=5,
+        research_max_verification_searches_per_app=0,
+        research_max_verification_fetches_per_app=0,
     )
 
 
@@ -175,6 +249,9 @@ def test_pipeline_uses_bounded_calls_and_separates_audit_artifacts(tmp_path: Pat
         "admission-diff.json",
         "admitted-draft.json",
         "final-validation.json",
+        "first-pass-completeness.json",
+        "final-completeness.json",
+        "final-status.json",
         "final.json",
     ):
         assert (result.app_dir / artifact).exists()
@@ -194,6 +271,38 @@ def test_unsupported_claim_is_downgraded_and_final_is_written(tmp_path: Path) ->
     assert result.final.buildability.value == "yes"
     assert "commercial_requirement" in result.validation.unknown_fields
     assert (result.app_dir / "final.json").exists()
+
+
+def test_bounded_recovery_fetches_one_targeted_source_and_reaudits(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path)
+    settings.research_max_verification_searches_per_app = 1
+    settings.research_max_verification_fetches_per_app = 1
+    first = make_valid_draft()
+    recovery = make_valid_draft()
+    recovery.credential_access.evidence = [
+        EvidenceRef(source_id="source_6", snippet_id="source_6_snippet_001")
+    ]
+    research = RecoveryResearchClient()
+    extraction = SequencedExtractionClient(first, recovery)
+    audit = FakeAuditClient()
+
+    result = run_app_pipeline(
+        settings=settings,
+        run_id="offline-recovery",
+        app_id=61,
+        research_client=research,
+        extraction_client=extraction,
+        audit_client=audit,
+    )
+
+    assert [tool for tool, _arguments in research.calls].count(SEARCH_TOOL) == 6
+    assert [tool for tool, _arguments in research.calls].count(FETCH_TOOL) == 6
+    assert extraction.calls == 2
+    assert audit.calls == 2
+    assert result.final.status == RecordStatus.VERIFIED
+    assert not result.final.completeness.requires_verification
+    assert (result.app_dir / "verification/extraction-draft.json").exists()
+    assert (result.app_dir / "verification/admission-diff.json").exists()
 
 
 def test_literal_failure_is_fatal_and_writes_no_final(tmp_path: Path) -> None:

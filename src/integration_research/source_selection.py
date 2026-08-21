@@ -109,6 +109,39 @@ ROLE_TERMS: dict[SourceRole, tuple[str, ...]] = {
     SourceRole.MCP: ("mcp", "model-context-protocol", "model context protocol"),
 }
 
+CRITICAL_ROLE_SOURCE_LIMITS: dict[SourceRole, int] = {
+    SourceRole.AUTHENTICATION: 2,
+    SourceRole.CREDENTIAL_ACCESS: 2,
+    SourceRole.API_SURFACE: 2,
+}
+
+FIELD_RECOVERY_TERMS: dict[str, tuple[SourceRole, str]] = {
+    "auth_methods": (
+        SourceRole.AUTHENTICATION,
+        "developer authentication OAuth API key access token authorization code",
+    ),
+    "credential_access": (
+        SourceRole.CREDENTIAL_ACCESS,
+        "create API credentials developer portal administrator register app request access",
+    ),
+    "api_availability": (
+        SourceRole.API_SURFACE,
+        "developer API reference endpoints request response",
+    ),
+    "callable_interface": (
+        SourceRole.API_SURFACE,
+        "API reference REST GraphQL GET POST endpoints resources",
+    ),
+    "api_breadth": (
+        SourceRole.API_SURFACE,
+        "API reference GET POST PATCH DELETE resources endpoints",
+    ),
+    "buildability_path": (
+        SourceRole.API_SURFACE,
+        "developer API reference CLI SDK callable operations",
+    ),
+}
+
 MINIMUM_ROLE_SCORES: dict[SourceRole, int] = {role: 90 for role in ROLE_ORDER}
 
 # On shared code forges, the hostname alone does not identify an official project. An owner and
@@ -209,7 +242,7 @@ def build_search_plans(
     app: AppInput, policy: TrustedSourcePolicy | None = None
 ) -> tuple[SearchPlan, ...]:
     selected_policy = policy or derive_trusted_source_policy(app)
-    sites = " OR ".join(f"site:{host}" for host in selected_policy.seed_hosts)
+    sites = " OR ".join(f"site:{host}" for host in _expanded_search_hosts(selected_policy))
     identity = f'"{app.app_name}" {app.category}'
     hint = app.website_hint
     notes = app.notes
@@ -218,6 +251,34 @@ def build_search_plans(
         SearchPlan(role=role, query=f"{prefix} {ROLE_QUERY_TERMS[role]}".strip())
         for role in ROLE_ORDER
     )
+
+
+def _expanded_search_hosts(policy: TrustedSourcePolicy) -> tuple[str, ...]:
+    """Include common official developer subdomains without widening the trust boundary."""
+
+    hosts = list(policy.seed_hosts)
+    for host in policy.seed_hosts:
+        if len(host.split(".")) != 2:
+            continue
+        hosts.extend(f"{prefix}.{host}" for prefix in ("developers", "developer", "docs", "api"))
+    return tuple(dict.fromkeys(hosts))
+
+
+def build_targeted_search_plan(
+    app: AppInput,
+    field: str,
+    policy: TrustedSourcePolicy | None = None,
+) -> SearchPlan:
+    """Build one catalog-anchored recovery query for a specific critical gap."""
+
+    selected_policy = policy or derive_trusted_source_policy(app)
+    try:
+        role, terms = FIELD_RECOVERY_TERMS[field]
+    except KeyError as error:
+        raise ValueError(f"No bounded recovery query exists for field: {field}") from error
+    sites = " OR ".join(f"site:{host}" for host in _expanded_search_hosts(selected_policy))
+    identity = f'"{app.app_name}" {app.website_hint}'
+    return SearchPlan(role=role, query=" ".join(part for part in (sites, identity, terms) if part))
 
 
 def official_source_tier(url: str, policy: TrustedSourcePolicy) -> SourceTier | None:
@@ -395,14 +456,16 @@ def _meets_role_threshold(candidate: SearchCandidate) -> bool:
     return any(term in searchable for term in ROLE_TERMS[candidate.role])
 
 
-def select_sources(candidates: list[SearchCandidate], *, maximum: int = 5) -> list[SearchCandidate]:
-    """Select the best candidate independently for each role.
+def select_sources(candidates: list[SearchCandidate], *, maximum: int = 8) -> list[SearchCandidate]:
+    """Select one source for every role, then one extra page for each critical role.
 
     The same URL may be returned for multiple roles. The pipeline preserves those assignments and
-    deduplicates only the network fetch.
+    deduplicates only the network fetch. Catalog seed fallbacks can fill a missing primary role,
+    but are not used as a blind second page.
     """
 
     selected: list[SearchCandidate] = []
+    role_candidates_by_role: dict[SourceRole, list[SearchCandidate]] = {}
     for role in ROLE_ORDER:
         role_candidates = sorted(
             (
@@ -412,8 +475,22 @@ def select_sources(candidates: list[SearchCandidate], *, maximum: int = 5) -> li
             ),
             key=_sort_key,
         )
+        role_candidates_by_role[role] = role_candidates
         if role_candidates:
             selected.append(role_candidates[0])
+        if len(selected) >= maximum:
+            return selected
+
+    for role in CRITICAL_ROLE_SOURCE_LIMITS:
+        existing_urls = {
+            candidate.normalized_url for candidate in selected if candidate.role == role
+        }
+        for candidate in role_candidates_by_role[role][1:]:
+            if candidate.search_position < 0 or candidate.normalized_url in existing_urls:
+                continue
+            selected.append(candidate)
+            existing_urls.add(candidate.normalized_url)
+            break
         if len(selected) >= maximum:
             return selected
     return selected
